@@ -1,0 +1,251 @@
+#!/bin/sh
+
+# git-open-pull Copyright 2011 Jehiah Czebotar <jehiah@gmail.com>
+# http://github.com/jehiah/git-open-pull
+
+## This program is free software: you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, either version 3 of the License, or (at
+## your option) any later version.
+## 
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+## 
+## You can find the GNU General Public License at:
+## http://www.gnu.org/licenses/
+
+#
+# ABOUT
+#
+#       Because the ideal workflow is `issue -> branch -> pull request` this script
+#       takes a github issue and turns it into a pull request based on your branch
+#       aginst master in the integration account
+#
+#       This makes use of the github `POST /repos/:user/:repo/pulls` endpoint
+#       more info on that is available at http://developer.github.com/v3/pulls/
+#
+# USAGE
+#
+#       $ git open-pull [options] [feature_branch]
+#
+# OPTIONS
+#
+#       -u --user   - github username
+#       -p --password - github password
+#       -i --issue  - issue number
+#       -b --base   - the branch you want your changes pulled into. default: master
+#       --base-account - the account containing issue and the base branch to merge into
+#       --base-repo - the github repository name
+#       
+#       feature-branch - the branch (or git ref) where your changes are implemented
+#                        feature branch is assumed to be user/feature-branch if no
+#                        user is specified. default: working branch name (or prompted)
+#
+#
+# CONFIGURATION
+#
+#       If available, git-open-pull will use the following config values. When not available
+#       They will be requested on the command line. Note storing your git password this way is
+#       not secure.
+#
+#       [github]
+#               user = ....
+#               password = ....
+#       [git-open-pull]
+#               base-account = ....
+#               base = master
+
+PYTHON_CMD=`/usr/bin/env python`
+[ $? != 0 ] && echo "unable to find 'python' command" && exit 1;
+GIT_CMD=`/usr/bin/env git`
+[ $? != 0 ] && echo "unable to find 'git' command" && exit 1;
+
+# grab defaults where we can
+#####################
+BASE_ACCOUNT=`$GIT_CMD config --get git-open-pull.base-account`
+BASE_REPO=`$GIT_CMD config --get git-open-pull.base-repo`
+BASE_BRANCH=`$GIT_CMD config --get git-open-pull.base || echo "master"`
+GITHUB_USER=`$GIT_CMD config --get github.user`
+GITHUB_PASSWORD=`$GIT_CMD config --get github.password`
+FEATURE_BRANCH=`$GIT_CMD describe --contains --all HEAD`
+ISSUE_NUMBER=`echo $FEATURE_BRANCH | sed -r -e 's/.*_([0-9]+)$/\1/'`
+if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then 
+    ISSUE_NUMBER=""; 
+fi
+
+# parse the command line args
+#####################
+while [ "$1" != "" ]; do
+    PARAM=`echo "$1" | awk -F= '{print $1}'`
+    VALUE=`echo "$1" | awk -F= '{print $2}'`
+    case $PARAM in
+        -u | --user)
+            GITHUB_USER="$VALUE"
+            ;;
+        -p | --password)
+            GITHUB_PASSWORD="$VALUE"
+            ;;
+        --base-account)
+            BASE_ACCOUNT="$VALUE"
+            ;;
+        --base-repo)
+            BASE_REPO="$VALUE"
+            ;;
+        -b | --base)
+            BASE_BRANCH="$VALUE"
+            ;;
+        -i | --issue)
+            ISSUE_NUMBER="$VALUE"
+            ;;
+        * )
+            FEATURE_BRANCH="$1"
+            ;;
+    esac
+    shift
+done
+
+
+# prompt for values as needed
+#####################
+if [ -z "$GITHUB_USER" ]; then
+    read -p "github username: " GITHUB_USER
+fi
+if [ -z "$GITHUB_PASSWORD" ]; then
+    # turn off echo to the shell
+    stty -echo 
+    read -p "github password: " GITHUB_PASSWORD; echo
+    stty echo
+fi
+
+if [ -z "$BASE_ACCOUNT" ]; then
+    read -p "remote github account to pull changes into: " BASE_ACCOUNT
+    $GIT_CMD config git-open-pull.base_account $BASE_ACCOUNT
+fi
+
+if [ -z "$BASE_REPO" ]; then
+    read -p "github repsitory on $BASE_ACCOUNT to pull changes into: " BASE_REPO
+    $GIT_CMD config git-open-pull.base_repo $BASE_REPO
+fi
+
+if [ -z "$ISSUE_NUMBER" ]; then
+    read -p "enter issue number: " ISSUE_NUMBER
+else
+    read -p "issue number [$ISSUE_NUMBER]: " temp
+    [ -n "$temp" ] && ISSUE_NUMBER=$temp
+fi
+
+if [ -z "$FEATURE_BRANCH" ]; then
+    read -p "enter branch to base pull request on: " FEATURE_BRANCH
+else
+    read -p "base pull requst on [$FEATURE_BRANCH]: " temp
+    [ -n "$temp" ] && FEATURE_BRANCH=$temp
+fi
+
+
+# validate remote information
+##############################
+
+# branch should be separated with ':'
+FEATURE_BRANCH=$(echo $FEATURE_BRANCH | sed -e 's/\//:/g')
+# if username part was not specified, assume it's the github username
+if ! echo $FEATURE_BRANCH | egrep -q ':'; then
+    FEATURE_BRANCH="$GITHUB_USER:$FEATURE_BRANCH"
+fi
+
+# now lookup issue information
+# endpoint => /repos/:user/:repo/issues/:id
+endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues/$ISSUE_NUMBER"
+ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" $endpoint`
+ISSUE_STATE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = json.loads(sys.stdin.read())
+if "message" in data:
+    print "ERROR verifying issue number: ", data["message"]
+else:
+    print data.get("state", "unknown-issue")
+')
+
+[[ "$ISSUE_STATE" =~ "ERROR" ]] && echo $ISSUE_STATE && exit 1
+
+if [ "$ISSUE_STATE" != "open" ]; then
+    echo ""
+    echo "Error: $BASE_ACCOUNT/$BASE_REPO issue $issue_number is $ISSUE_STATE"
+    exit 1;
+fi
+ISSUE_TITLE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = json.loads(sys.stdin.read())
+print data["title"]
+')
+
+
+# check for source branch
+# endpoint -> /repos/:user/:repo/branches
+source_user=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $1}')
+endpoint="https://api.github.com/repos/$source_user/$BASE_REPO/branches"
+branch_name=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $NF}')
+BRANCHES_JSON=`curl --silent -H "Accept: application/vnd.github-branches.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" $endpoint`
+BRANCH_EXISTS=$(echo $BRANCHES_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = json.loads(sys.stdin.read())
+data = [x for x in data if x.get("name") == sys.argv[-1]]
+print len(data)
+' "$branch_name")
+if [ "$BRANCH_EXISTS" != "1" ]; then
+    echo ""
+    echo "Error: branch ($branch_name) does not exist in $source_user/$BASE_REPO"
+    echo -n -e "\tvalid branches are: "
+    echo $BRANCHES_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = json.loads(sys.stdin.read())
+data = [x.get("name") for x in data]
+print ", ".join(data)
+'
+    exit 1;
+fi
+
+echo "Opening pull request on $BASE_ACCOUNT/$BASE_REPO"
+echo "Issue: $ISSUE_NUMBER ($ISSUE_TITLE)"
+echo "pulling from $FEATURE_BRANCH into $BASE_ACCOUNT/$BASE"
+read -p "confirm [y/n]:" confirm
+if [ "$confirm" != "y" ]; then
+    echo "exiting";
+    exit 1;
+fi
+
+json="{\"issue\":$ISSUE_NUMBER, \"base\":\"$BASE\", \"head\":\"$FEATURE_BRANCH\"}"
+endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/pulls"
+PULL_JSON=`curl --silent -H "Accept: application/vnd.github-pull.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" --data-binary "$json" $endpoint`
+PULL_STATUS=$(echo $PULL_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = json.loads(sys.stdin.read())
+pull_link = data.get("html_url")
+if not pull_link:
+    print "ERROR updating issue to a pull request: ", data.get("message")
+else:
+    print "Pull Request Opened"
+    print pull_link
+')
+echo $PULL_STATUS
