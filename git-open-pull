@@ -140,7 +140,7 @@ fi
 if [ -z "$FEATURE_BRANCH" ]; then
     read -p "enter branch to base pull request on: " FEATURE_BRANCH
 else
-    read -p "base pull requst on [$FEATURE_BRANCH]: " temp
+    read -p "base pull request on [$FEATURE_BRANCH]: " temp
     [ -n "$temp" ] && FEATURE_BRANCH=$temp
 fi
 
@@ -165,7 +165,9 @@ try:
 except ImportError:
     import json
 import sys
-data = json.loads(sys.stdin.read().replace("\n",""))
+data = sys.stdin.read().strip().replace("\n",r"\n")
+open("/tmp/issue.json", "w").write(data)
+data = json.loads(data)
 if "message" in data:
     print "ERROR verifying issue number: ", data["message"]
 else:
@@ -185,7 +187,8 @@ try:
 except ImportError:
     import json
 import sys
-data = json.loads(sys.stdin.read().replace("\n",""))
+data = sys.stdin.read().strip().replace("\n",r"\n")
+data = json.loads(data)
 print data["title"]
 ')
 [[ $? != 0 ]] && echo "unknown error extracting issue title $ISSUE_JSON" && exit 1
@@ -203,7 +206,8 @@ try:
 except ImportError:
     import json
 import sys
-data = json.loads(sys.stdin.read().replace("\n",""))
+data = sys.stdin.read().strip().replace("\n",r"\n")
+data = json.loads(data)
 data = [x for x in data if x.get("name") == sys.argv[-1]]
 print len(data)
 ' "$branch_name")
@@ -217,7 +221,8 @@ try:
 except ImportError:
     import json
 import sys
-data = json.loads(sys.stdin.read().replace("\n",""))
+data = sys.stdin.read().strip().replace("\n",r"\n")
+data = json.loads(data)
 data = [x.get("name") for x in data]
 print ", ".join(data)
 '
@@ -242,7 +247,8 @@ try:
 except ImportError:
     import json
 import sys
-data = json.loads(sys.stdin.read().replace("\n",""))
+data = sys.stdin.read().strip().replace("\n",r"\n")
+data = json.loads(data)
 pull_link = data.get("html_url")
 if not pull_link:
     print "ERROR updating issue to a pull request: ", data.get("message")
