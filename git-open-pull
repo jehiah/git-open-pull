@@ -165,7 +165,7 @@ try:
 except ImportError:
     import json
 import sys
-data = sys.stdin.read().strip().replace("\n",r"\n")
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 open("/tmp/issue.json", "w").write(data)
 data = json.loads(data)
 if "message" in data:
@@ -187,7 +187,7 @@ try:
 except ImportError:
     import json
 import sys
-data = sys.stdin.read().strip().replace("\n",r"\n")
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 data = json.loads(data)
 print data["title"]
 ')
@@ -206,7 +206,7 @@ try:
 except ImportError:
     import json
 import sys
-data = sys.stdin.read().strip().replace("\n",r"\n")
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 data = json.loads(data)
 data = [x for x in data if x.get("name") == sys.argv[-1]]
 print len(data)
@@ -221,7 +221,7 @@ try:
 except ImportError:
     import json
 import sys
-data = sys.stdin.read().strip().replace("\n",r"\n")
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 data = json.loads(data)
 data = [x.get("name") for x in data]
 print ", ".join(data)
@@ -247,7 +247,7 @@ try:
 except ImportError:
     import json
 import sys
-data = sys.stdin.read().strip().replace("\n",r"\n")
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 data = json.loads(data)
 pull_link = data.get("html_url")
 if not pull_link:
