@@ -251,9 +251,12 @@ data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
 data = json.loads(data)
 pull_link = data.get("html_url")
 if not pull_link:
-    print "ERROR updating issue to a pull request: ", data.get("message")
+    print "ERROR updating issue to a pull request: " + data.get("message")
+    for error in data.get("errors", []):
+        if error.get("message"):
+            print "  --> ERROR DETAIL: " + error.get("message")
 else:
     print "Pull Request Opened"
     print pull_link
 ')
-echo $PULL_STATUS
+echo "$PULL_STATUS"
