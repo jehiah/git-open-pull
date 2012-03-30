@@ -34,6 +34,8 @@
 #
 #       -u --user   - github username
 #       -p --password - github password
+#       --save - save access token for future use
+#       -t --token - github oauth token
 #       -i --issue  - issue number
 #       -b --base   - the branch you want your changes pulled into. default: master
 #       --base-account - the account containing issue and the base branch to merge into
@@ -54,6 +56,7 @@
 #               user = ....
 #               password = ....
 #       [gitOpenPull]
+#               token = .....
 #               baseAccount = ....
 #               base = master
 
@@ -69,6 +72,7 @@ BASE_REPO=`$GIT_CMD config --get gitOpenPull.baseRepo`
 BASE_BRANCH=`$GIT_CMD config --get gitOpenPull.base || echo "master"`
 GITHUB_USER=`$GIT_CMD config --get github.user`
 GITHUB_PASSWORD=`$GIT_CMD config --get github.password`
+GITHUB_TOKEN=`$GIT_CMD config --get gitOpenPull.token`
 FEATURE_BRANCH=`$GIT_CMD describe --contains --all HEAD`
 ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/.*_([0-9]+)$/\1/'`
 if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then 
@@ -87,6 +91,9 @@ while [ "$1" != "" ]; do
         -p | --password)
             GITHUB_PASSWORD="$VALUE"
             ;;
+        -t | --token)
+            GITHUB_TOKEN="$VALUE"
+            ;;
         --base-account)
             BASE_ACCOUNT="$VALUE"
             ;;
@@ -99,6 +106,9 @@ while [ "$1" != "" ]; do
         -i | --issue)
             ISSUE_NUMBER="$VALUE"
             ;;
+        --save)
+            SAVE_ACCESS_TOKEN=1
+            ;;
         * )
             FEATURE_BRANCH="$1"
             ;;
@@ -109,24 +119,57 @@ done
 
 # prompt for values as needed
 #####################
-if [ -z "$GITHUB_USER" ]; then
-    read -p "github username: " GITHUB_USER
-fi
-if [ -z "$GITHUB_PASSWORD" ]; then
-    echo "using github username: $GITHUB_USER"
-    # turn off echo to the shell
-    stty -echo 
-    read -p "github password: " GITHUB_PASSWORD; echo
-    stty echo
+if [ -z "$GITHUB_TOKEN" ]; then
+    
+    if [ -z "$GITHUB_USER" ]; then
+        read -p "github username: " GITHUB_USER
+    fi
+    if [ -z "$GITHUB_PASSWORD" ]; then
+        echo "using github username: $GITHUB_USER"
+        # turn off echo to the shell
+        stty -echo 
+        read -p "github password: " GITHUB_PASSWORD; echo
+        stty echo
+    fi
+
+    # now we need to get an oauth token
+    # this asks for access to private repos because, well, obviously you could be using this
+    # script for a private repo
+    echo "... getting access token (run with --save to save access token)"
+    endpoint="https://api.github.com/authorizations"
+    OAUTH_JSON=`curl --silent -u "$GITHUB_USER:$GITHUB_PASSWORD" -d '{"scopes":["repo"]}' $endpoint`
+    GITHUB_TOKEN=$(echo $OAUTH_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
+data = json.loads(data)
+if "token" in data:
+    print data["token"]
+')
+
+    if [ -z "$GITHUB_TOKEN" ]; then
+        echo $OAUTH_JSON
+        exit 1;
+    fi
+    
+    # conditionally save the access token
+    if [ "$SAVE_ACCESS_TOKEN" == "1" ]; then
+        $GIT_CMD config gitOpenPull.token "$GITHUB_TOKEN"
+    fi
+    echo $GITHUB_TOKEN
+
 fi
 
 if [ -z "$BASE_ACCOUNT" ]; then
-    read -p "remote github account to merge changes into: " BASE_ACCOUNT
+    read -p "destination github username (account to pull code into): " BASE_ACCOUNT
     $GIT_CMD config gitOpenPull.baseAccount $BASE_ACCOUNT
 fi
 
 if [ -z "$BASE_REPO" ]; then
-    read -p "github repsitory on $BASE_ACCOUNT to pull changes into: " BASE_REPO
+    read -p "github repsitory name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
     $GIT_CMD config gitOpenPull.baseRepo $BASE_REPO
 fi
 
@@ -158,7 +201,7 @@ fi
 # now lookup issue information
 # endpoint => /repos/:user/:repo/issues/:id
 endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues/$ISSUE_NUMBER"
-ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" $endpoint`
+ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" "$endpoint?access_token=$GITHUB_TOKEN"`
 ISSUE_STATE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
 try:
     import simplejson as json
@@ -166,7 +209,7 @@ except ImportError:
     import json
 import sys
 data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-open("/tmp/issue.json", "w").write(data)
+# open("/tmp/issue.json", "w").write(data)
 data = json.loads(data)
 if "message" in data:
     print "ERROR verifying issue number: ", data["message"]
@@ -199,7 +242,7 @@ print data["title"]
 source_user=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $1}')
 endpoint="https://api.github.com/repos/$source_user/$BASE_REPO/branches"
 branch_name=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $NF}')
-BRANCHES_JSON=`curl --silent -H "Accept: application/vnd.github-branches.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" $endpoint`
+BRANCHES_JSON=`curl --silent -H "Accept: application/vnd.github-branches.text+json,application/json" "$endpoint?access_token=$GITHUB_TOKEN"`
 BRANCH_EXISTS=$(echo $BRANCHES_JSON | $PYTHON_CMD -c '
 try:
     import simplejson as json
@@ -240,7 +283,7 @@ fi
 
 json="{\"issue\":$ISSUE_NUMBER, \"base\":\"$BASE_BRANCH\", \"head\":\"$FEATURE_BRANCH\"}"
 endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/pulls"
-PULL_JSON=`curl --silent -H "Accept: application/vnd.github-pull.text+json,application/json" -u "$GITHUB_USER:$GITHUB_PASSWORD" --data-binary "$json" $endpoint`
+PULL_JSON=`curl --silent -H "Accept: application/vnd.github-pull.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
 PULL_STATUS=$(echo $PULL_JSON | $PYTHON_CMD -c '
 try:
     import simplejson as json
