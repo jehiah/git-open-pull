@@ -32,8 +32,8 @@
 #
 # OPTIONS
 #
-#       -u --user   - github username
-#       -p --password - github password
+#       -u --user   - github username (not needed when passing --token, or using a saved token)
+#       -p --password - github password (not needed when passing --token, or using a saved token)
 #       --save - save access token for future use
 #       -t --token - github oauth token
 #       -i --issue  - issue number
@@ -58,6 +58,7 @@
 #       [gitOpenPull]
 #               token = .....
 #               baseAccount = ....
+#               baseRepo = .....
 #               base = master
 
 PYTHON_CMD=`/usr/bin/which python`
@@ -159,8 +160,8 @@ if "token" in data:
     if [ "$SAVE_ACCESS_TOKEN" == "1" ]; then
         $GIT_CMD config gitOpenPull.token "$GITHUB_TOKEN"
     fi
-    echo $GITHUB_TOKEN
-
+else
+    echo "... using saved access token"
 fi
 
 if [ -z "$BASE_ACCOUNT" ]; then
