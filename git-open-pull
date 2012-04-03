@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # git-open-pull Copyright 2011 Jehiah Czebotar <jehiah@gmail.com>
 # http://github.com/jehiah/git-open-pull
