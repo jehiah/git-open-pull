@@ -175,7 +175,42 @@ if [ -z "$BASE_REPO" ]; then
 fi
 
 if [ -z "$ISSUE_NUMBER" ]; then
-    read -p "enter issue number: " ISSUE_NUMBER
+    read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
+    if [ "$ISSUE_NUMBER" == "c" ]; then
+        read -p "issue title: " ISSUE_TITLE
+        read -p "issue description: " ISSUE_DESCRIPTION
+        endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
+        json="{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_DESCRIPTION\"}"
+        ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
+        ISSUE_NUMBER=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
+try:
+    import simplejson as json
+except ImportError:
+    import json
+import sys
+data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
+data = json.loads(data)
+if "number" not in data:
+    print "ERROR verifying issue number: ", data
+else:
+    print data.get("number")
+')
+        if ! echo $ISSUE_NUMBER | egrep -q '^[0-9]+$'; then 
+            echo "Error creating issue $ISSUE_NUMBER"
+            exit 1;
+        fi
+
+        echo "created issue $ISSUE_NUMBER"
+        read -p "rename branch to ${FEATURE_BRANCH}_${ISSUE_NUMBER} [y/n]:" confirm
+        if [ "$confirm" == "y" ] || [ -z "$confirm" ]; then
+            echo "renaming local branch $FEATURE_BRANCH -> ${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+            $GIT_CMD branch -m "${FEATURE_BRANCH}_${ISSUE_NUMBER}" || exit 1
+            echo "pushing branch to $GITHUB_USER"
+            $GIT_CMD push $GITHUB_USER "${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+            FEATURE_BRANCH="${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+        fi
+    
+    fi
 else
     read -p "issue number [$ISSUE_NUMBER]: " temp
     [ -n "$temp" ] && ISSUE_NUMBER=$temp
