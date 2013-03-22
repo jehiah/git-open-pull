@@ -74,11 +74,16 @@ BASE_BRANCH=`$GIT_CMD config --get gitOpenPull.base || echo "master"`
 GITHUB_USER=`$GIT_CMD config --get github.user`
 GITHUB_PASSWORD=`$GIT_CMD config --get github.password`
 GITHUB_TOKEN=`$GIT_CMD config --get gitOpenPull.token`
-FEATURE_BRANCH=`$GIT_CMD describe --contains --all HEAD`
-ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/.*_([0-9]+)$/\1/'`
-if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then 
-    ISSUE_NUMBER=""; 
+FEATURE_BRANCH=`$GIT_CMD rev-parse --abbrev-ref HEAD`
+ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/.*[-_]([0-9]+)$/\1/'`
+if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
+    # Some people like to use the number as the prefix, try that.
+    ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/^([0-9]+)[-_].*/\1/'`
+    if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
+        ISSUE_NUMBER=""
+    fi
 fi
+
 
 # parse the command line args
 #####################
@@ -201,19 +206,20 @@ else:
         fi
 
         echo "created issue $ISSUE_NUMBER"
-        read -p "rename branch to ${FEATURE_BRANCH}_${ISSUE_NUMBER} [y/n]:" confirm
-        if [ "$confirm" == "y" ] || [ -z "$confirm" ]; then
-            echo "renaming local branch $FEATURE_BRANCH -> ${FEATURE_BRANCH}_${ISSUE_NUMBER}"
-            $GIT_CMD branch -m "${FEATURE_BRANCH}_${ISSUE_NUMBER}" || exit 1
-            echo "pushing branch to $GITHUB_USER"
-            $GIT_CMD push $GITHUB_USER "${FEATURE_BRANCH}_${ISSUE_NUMBER}"
-            FEATURE_BRANCH="${FEATURE_BRANCH}_${ISSUE_NUMBER}"
-        fi
-    
     fi
 else
     read -p "issue number [$ISSUE_NUMBER]: " temp
     [ -n "$temp" ] && ISSUE_NUMBER=$temp
+fi
+
+# Do we need/want to rename the branch?
+if ! echo "$FEATURE_BRANCH" | egrep -q "^$ISSUE_NUMBER[_-]|[_-]$ISSUE_NUMBER\$"; then
+    read -p "rename branch to ${FEATURE_BRANCH}_${ISSUE_NUMBER} [y/n]:" confirm
+    if [ "$confirm" == "y" ] || [ -z "$confirm" ]; then
+        echo "renaming local branch $FEATURE_BRANCH -> ${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+        $GIT_CMD branch -m "${FEATURE_BRANCH}_${ISSUE_NUMBER}" || exit 1
+        FEATURE_BRANCH="${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+    fi
 fi
 
 if [ -z "$FEATURE_BRANCH" ]; then
@@ -223,6 +229,11 @@ else
     [ -n "$temp" ] && FEATURE_BRANCH=$temp
 fi
 
+echo "pushing branch ${FEATURE_BRANCH} to $GITHUB_USER"
+$GIT_CMD push $GITHUB_USER "${FEATURE_BRANCH}" || exit 1
+# Sometimes the branch validation fails even though this pushed.
+# Race condition?
+sleep 0.5
 
 # validate remote information
 ##############################
