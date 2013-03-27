@@ -224,6 +224,16 @@ fi
 
 if [ -z "$FEATURE_BRANCH" ]; then
     read -p "enter branch to base pull request on: " FEATURE_BRANCH
+    if ! [[ "$FEATURE_BRANCH" == *"$ISSUE_NUMBER"* ]]; then
+        read -p "rename branch to ${FEATURE_BRANCH}_${ISSUE_NUMBER} [y/n]:" confirm
+        if [ "$confirm" == "y" ] || [ -z "$confirm" ]; then
+            echo "renaming local branch $FEATURE_BRANCH -> ${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+            $GIT_CMD branch -m "${FEATURE_BRANCH}_${ISSUE_NUMBER}" || exit 1
+            echo "pushing branch to $GITHUB_USER"
+            $GIT_CMD push $GITHUB_USER "${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+            FEATURE_BRANCH="${FEATURE_BRANCH}_${ISSUE_NUMBER}"
+        fi
+    fi
 else
     read -p "base pull request on [$FEATURE_BRANCH]: " temp
     [ -n "$temp" ] && FEATURE_BRANCH=$temp
