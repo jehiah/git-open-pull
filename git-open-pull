@@ -231,9 +231,10 @@ fi
 
 echo "pushing branch ${FEATURE_BRANCH} to $GITHUB_USER"
 $GIT_CMD push $GITHUB_USER "${FEATURE_BRANCH}" || exit 1
-# Sometimes the branch validation fails even though this pushed.
-# Race condition?
-sleep 0.5
+
+# Github needs a variable amount of time before a new branch
+# can be used to open a pull request. This is usually enough.
+sleep 2
 
 # validate remote information
 ##############################
