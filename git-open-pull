@@ -181,7 +181,7 @@ if [ -z "$BASE_ACCOUNT" ]; then
 fi
 
 if [ -z "$BASE_REPO" ]; then
-    read -p "github repsitory name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
+    read -p "github repository name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
     $GIT_CMD config gitOpenPull.baseRepo $BASE_REPO
 fi
 
