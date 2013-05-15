@@ -16,50 +16,48 @@
 ## You can find the GNU General Public License at:
 ## http://www.gnu.org/licenses/
 
-#
-# ABOUT
-#
-#       Because the ideal workflow is `issue -> branch -> pull request` this script
-#       takes a github issue and turns it into a pull request based on your branch
-#       aginst master in the integration account
-#
-#       This makes use of the github `POST /repos/:user/:repo/pulls` endpoint
-#       more info on that is available at http://developer.github.com/v3/pulls/
-#
-# USAGE
-#
-#       $ git open-pull [options] [feature_branch]
-#
-# OPTIONS
-#
-#       -u --user   - github username (not needed when passing --token, or using a saved token)
-#       -p --password - github password (not needed when passing --token, or using a saved token)
-#       --save - save access token for future use
-#       -t --token - github oauth token
-#       -i --issue  - issue number
-#       -b --base   - the branch you want your changes pulled into. default: master
-#       --base-account - the account containing issue and the base branch to merge into
-#       --base-repo - the github repository name
-#       
-#       feature-branch - the branch (or git ref) where your changes are implemented
-#                        feature branch is assumed to be user/feature-branch if no
-#                        user is specified. default: working branch name (or prompted)
-#
-#
-# CONFIGURATION
-#
-#       If available, git-open-pull will use the following config values. When not available
-#       They will be requested on the command line. Note storing your git password this way is
-#       not secure.
-#
-#       [github]
-#               user = ....
-#               password = ....
-#       [gitOpenPull]
-#               token = .....
-#               baseAccount = ....
-#               baseRepo = .....
-#               base = master
+HELP_TEXT='
+ USAGE
+       $ git open-pull [options] [feature_branch]
+
+ OPTIONS
+       -u --user   - github username (not needed when passing --token, or using a saved token)
+       -p --password - github password (not needed when passing --token, or using a saved token)
+       --save - save access token for future use
+       -t --token - github oauth token
+       -i --issue  - issue number
+       -b --base   - the branch you want your changes pulled into. default: master
+       --base-account - the account containing issue and the base branch to merge into
+       --base-repo - the github repository name
+       
+       feature-branch - the branch (or git ref) where your changes are implemented
+                        feature branch is assumed to be user/feature-branch if no
+                        user is specified. default: working branch name (or prompted)
+
+
+ CONFIGURATION
+       If available, git-open-pull will use the following config values. When not available
+       They will be requested on the command line. Note storing your git password this way is
+       not secure.
+
+       [github]
+               user = ....
+               password = ....
+       [gitOpenPull]
+               token = .....
+               baseAccount = ....
+               baseRepo = .....
+               base = master
+
+ ABOUT
+       Because the ideal workflow is `issue -> branch -> pull request` this script
+       takes a github issue and turns it into a pull request based on your branch
+       against master in the integration account
+
+       This makes use of the github `POST /repos/:user/:repo/pulls` endpoint
+       more info on that is available at http://developer.github.com/v3/pulls/
+
+'
 
 PYTHON_CMD=`/usr/bin/which python`
 [ $? != 0 ] && echo "unable to find 'python' command" && exit 1;
@@ -87,33 +85,53 @@ fi
 
 # parse the command line args
 #####################
-while [ "$1" != "" ]; do
-    PARAM=`echo "$1" | awk -F= '{print $1}'`
-    VALUE=`echo "$1" | awk -F= '{print $2}'`
+while [ $# -gt 0 ]; do
+    # try to handle any of "--key=value" or "--key value" or "--flag"
+    # extra shift only if form is "--key value"
+    if [[ "$1" == *=* ]]; then
+        PARAM=${1%%=*}
+        VALUE=${1#*=}
+        SHIFT=false
+    else
+        PARAM=$1
+        VALUE=$2
+        SHIFT=shift
+    fi
     case $PARAM in
         -u | --user)
             GITHUB_USER="$VALUE"
+            $SHIFT
             ;;
         -p | --password)
             GITHUB_PASSWORD="$VALUE"
+            $SHIFT
             ;;
         -t | --token)
             GITHUB_TOKEN="$VALUE"
+            $SHIFT
             ;;
         --base-account)
             BASE_ACCOUNT="$VALUE"
+            $SHIFT
             ;;
         --base-repo)
             BASE_REPO="$VALUE"
+            $SHIFT
             ;;
         -b | --base)
             BASE_BRANCH="$VALUE"
+            $SHIFT
             ;;
         -i | --issue)
             ISSUE_NUMBER="$VALUE"
+            $SHIFT
             ;;
         --save)
             SAVE_ACCESS_TOKEN=1
+            ;;
+        -h | --help)
+            printf "%s" "$HELP_TEXT"
+            exit
             ;;
         * )
             FEATURE_BRANCH="$1"
