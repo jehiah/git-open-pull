@@ -59,10 +59,16 @@ HELP_TEXT='
 
 '
 
-PYTHON_CMD=`/usr/bin/which python`
-[ $? != 0 ] && echo "unable to find 'python' command" && exit 1;
-GIT_CMD=`/usr/bin/which git`
-[ $? != 0 ] && echo "unable to find 'git' command" && exit 1;
+PYTHON_CMD=${PYTHON_CMD:-$(which python)}
+if [ -z "$PYTHON_CMD" ] || ! $PYTHON_CMD --version >/dev/null 2>&1 ; then
+    echo "unable to find 'python' command"
+    exit 1
+fi
+GIT_CMD=${GIT_CMD:-$(which git)}
+if [ -z "$GIT_CMD" ] || ! $GIT_CMD --version >/dev/null 2>&1 ; then
+    echo "unable to find 'git' command"
+    exit 1
+fi
 
 # grab defaults where we can
 #####################
@@ -193,7 +199,7 @@ if [ -z "$BASE_ACCOUNT" ]; then
 fi
 
 if [ -z "$BASE_REPO" ]; then
-    read -p "github repsitory name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
+    read -p "github repository name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
     $GIT_CMD config gitOpenPull.baseRepo $BASE_REPO
 fi
 
