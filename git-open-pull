@@ -59,7 +59,7 @@ HELP_TEXT='
 
 '
 
-PYTHON_CMD=${PYTHON_CMD:-$(which python)}
+PYTHON_CMD=${PYTHON_CMD:-$(which python2)}
 if [ -z "$PYTHON_CMD" ] || ! $PYTHON_CMD --version >/dev/null 2>&1 ; then
     echo "unable to find 'python' command"
     exit 1
