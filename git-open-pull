@@ -293,7 +293,7 @@ else:
 
 if [ "$ISSUE_STATE" != "open" ]; then
     echo ""
-    echo "Error: $BASE_ACCOUNT/$BASE_REPO issue $issue_number is $ISSUE_STATE"
+    echo "Error: $BASE_ACCOUNT/$BASE_REPO issue $ISSUE_NUMBER is $ISSUE_STATE"
     exit 1;
 fi
 ISSUE_TITLE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
