@@ -146,6 +146,15 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if [ -z "$BASE_ACCOUNT" ]; then
+    read -p "destination github username (account to pull code into): " BASE_ACCOUNT
+    $GIT_CMD config gitOpenPull.baseAccount $BASE_ACCOUNT
+fi
+
+if [ -z "$BASE_REPO" ]; then
+    read -p "github repository name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
+    $GIT_CMD config gitOpenPull.baseRepo $BASE_REPO
+fi
 
 # prompt for values as needed
 #####################
@@ -167,7 +176,7 @@ if [ -z "$GITHUB_TOKEN" ]; then
     # script for a private repo
     echo "... getting access token (run with --save to save access token)"
     endpoint="https://api.github.com/authorizations"
-    OAUTH_JSON=`curl --silent -u "$GITHUB_USER:$GITHUB_PASSWORD" -d '{"scopes":["repo"]}' $endpoint`
+    OAUTH_JSON=`curl --silent -u "$GITHUB_USER:$GITHUB_PASSWORD" -d "{\"scopes\":[\"repo\"],\"note\":\"git-open-pull $BASE_ACCOUNT/$BASE_REPO\"}" $endpoint`
     GITHUB_TOKEN=$(echo $OAUTH_JSON | $PYTHON_CMD -c '
 try:
     import simplejson as json
@@ -188,19 +197,14 @@ if "token" in data:
     # conditionally save the access token
     if [ "$SAVE_ACCESS_TOKEN" == "1" ]; then
         $GIT_CMD config gitOpenPull.token "$GITHUB_TOKEN"
+    else
+        read -p "save access token? [Y/n]: " ASK_SAVE_ACCESS_TOKEN
+        if [ -z $ASK_SAVE_ACCESS_TOKEN ] || [ "$ASK_SAVE_ACCESS_TOKEN" == "y" ]; then
+            $GIT_CMD config gitOpenPull.token "$GITHUB_TOKEN"
+        fi
     fi
 else
     echo "... using saved access token"
-fi
-
-if [ -z "$BASE_ACCOUNT" ]; then
-    read -p "destination github username (account to pull code into): " BASE_ACCOUNT
-    $GIT_CMD config gitOpenPull.baseAccount $BASE_ACCOUNT
-fi
-
-if [ -z "$BASE_REPO" ]; then
-    read -p "github repository name (ie: github.com/$BASE_ACCOUNT/___): " BASE_REPO
-    $GIT_CMD config gitOpenPull.baseRepo $BASE_REPO
 fi
 
 if [ -z "$ISSUE_NUMBER" ]; then
