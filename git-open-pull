@@ -7,12 +7,12 @@
 ## it under the terms of the GNU General Public License as published by
 ## the Free Software Foundation, either version 3 of the License, or (at
 ## your option) any later version.
-## 
+##
 ## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-## 
+##
 ## You can find the GNU General Public License at:
 ## http://www.gnu.org/licenses/
 
@@ -21,15 +21,16 @@ HELP_TEXT='
        $ git open-pull [options] [feature_branch]
 
  OPTIONS
-       -u --user   - github username 
-       -p --password - github password (not needed when passing --token, or using a saved token)
-       --save - save access token for future use
-       -t --token - github oauth token
-       -i --issue  - issue number
-       -b --base   - the branch you want your changes pulled into. default: master
+       -u --user      - github username
+       -p --password  - github password (not needed when passing --token, or using a saved token)
+       --save         - save access token for future use
+       -t --token     - github oauth token
+       --otp          - one time password (two-factor auth)
+       -i --issue     - issue number
+       -b --base      - the branch you want your changes pulled into. default: master
        --base-account - the account containing issue and the base branch to merge into
-       --base-repo - the github repository name
-       
+       --base-repo    - the github repository name
+
        feature-branch - the branch (or git ref) where your changes are implemented
                         feature branch is assumed to be user/feature-branch if no
                         user is specified. default: working branch name (or prompted)
@@ -116,6 +117,10 @@ while [ $# -gt 0 ]; do
             GITHUB_TOKEN="$VALUE"
             $SHIFT
             ;;
+        --otp)
+            GITHUB_OTP="$VALUE"
+            $SHIFT
+            ;;
         --base-account)
             BASE_ACCOUNT="$VALUE"
             $SHIFT
@@ -159,16 +164,23 @@ fi
 # prompt for values as needed
 #####################
 if [ -z "$GITHUB_TOKEN" ]; then
-    
+
     if [ -z "$GITHUB_USER" ]; then
         read -p "github username: " GITHUB_USER
     fi
     if [ -z "$GITHUB_PASSWORD" ]; then
         echo "using github username: $GITHUB_USER"
         # turn off echo to the shell
-        stty -echo 
+        stty -echo
         read -p "github password: " GITHUB_PASSWORD; echo
         stty echo
+    fi
+    if [ -z "$GITHUB_OTP" ]; then
+        read -p "github one time password (leave blank if not using 2FA): " GITHUB_OTP
+    fi
+
+    if [ ! -z "$GITHUB_OTP" ]; then
+        otp_header="X-GitHub-OTP: $GITHUB_OTP"
     fi
 
     # now we need to get an oauth token
@@ -176,7 +188,7 @@ if [ -z "$GITHUB_TOKEN" ]; then
     # script for a private repo
     echo "... getting access token (run with --save to save access token)"
     endpoint="https://api.github.com/authorizations"
-    OAUTH_JSON=`curl --silent -u "$GITHUB_USER:$GITHUB_PASSWORD" -d "{\"scopes\":[\"repo\"],\"note\":\"git-open-pull $BASE_ACCOUNT/$BASE_REPO\"}" $endpoint`
+    OAUTH_JSON=`curl --silent -H "$otp_header" -u "$GITHUB_USER:$GITHUB_PASSWORD" -d "{\"scopes\":[\"repo\"],\"note\":\"git-open-pull $BASE_ACCOUNT/$BASE_REPO\"}" $endpoint`
     GITHUB_TOKEN=$(echo $OAUTH_JSON | $PYTHON_CMD -c '
 try:
     import simplejson as json
@@ -193,7 +205,7 @@ if "token" in data:
         echo $OAUTH_JSON
         exit 1;
     fi
-    
+
     # conditionally save the access token
     if [ "$SAVE_ACCESS_TOKEN" == "1" ]; then
         $GIT_CMD config gitOpenPull.token "$GITHUB_TOKEN"
@@ -232,7 +244,7 @@ if "number" not in data:
 else:
     print data.get("number")
 ')
-        if ! echo $ISSUE_NUMBER | egrep -q '^[0-9]+$'; then 
+        if ! echo $ISSUE_NUMBER | egrep -q '^[0-9]+$'; then
             echo "Error creating issue $ISSUE_NUMBER"
             exit 1;
         fi
