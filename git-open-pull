@@ -21,7 +21,7 @@ HELP_TEXT='
        $ git open-pull [options] [feature_branch]
 
  OPTIONS
-       -u --user   - github username (not needed when passing --token, or using a saved token)
+       -u --user   - github username 
        -p --password - github password (not needed when passing --token, or using a saved token)
        --save - save access token for future use
        -t --token - github oauth token
@@ -204,6 +204,10 @@ if "token" in data:
         fi
     fi
 else
+    if [ -z "$GITHUB_USER" ]; then
+        echo "Github username isn't set. Pass the --user flag to this script or set with \`git config --global github.user YOUR_USER_NAME\` to avoid being prompted"
+        read -p "github username: " GITHUB_USER
+    fi
     echo "... using saved access token"
 fi
 
