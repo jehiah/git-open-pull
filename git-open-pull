@@ -71,6 +71,22 @@ if [ -z "$GIT_CMD" ] || ! $GIT_CMD --version >/dev/null 2>&1 ; then
     exit 1
 fi
 
+python_data_script() {
+    local SCRIPT=$1
+    local OPT_ARG=$2
+    
+    $PYTHON_CMD -c "
+try:
+    import json
+except ImportError:
+    import simplejson as json
+import sys
+data = sys.stdin.read().strip().replace('\n',r'\n').replace('\r','')
+data = json.loads(data)
+$SCRIPT
+" $OPT_ARG
+}
+
 # grab defaults where we can
 #####################
 BASE_ACCOUNT=`$GIT_CMD config --get gitOpenPull.baseAccount`
@@ -189,16 +205,9 @@ if [ -z "$GITHUB_TOKEN" ]; then
     echo "... getting access token (run with --save to save access token)"
     endpoint="https://api.github.com/authorizations"
     OAUTH_JSON=`curl --silent -H "$otp_header" -u "$GITHUB_USER:$GITHUB_PASSWORD" -d "{\"scopes\":[\"repo\"],\"note\":\"git-open-pull $BASE_ACCOUNT/$BASE_REPO\"}" $endpoint`
-    GITHUB_TOKEN=$(echo $OAUTH_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
+    GITHUB_TOKEN=$(echo $OAUTH_JSON | python_data_script '
 if "token" in data:
-    print data["token"]
+    print(data["token"])
 ')
 
     if [ -z "$GITHUB_TOKEN" ]; then
@@ -231,18 +240,11 @@ if [ -z "$ISSUE_NUMBER" ]; then
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_DESCRIPTION\"}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
-        ISSUE_NUMBER=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
+        ISSUE_NUMBER=$(echo $ISSUE_JSON | python_data_script '
 if "number" not in data:
-    print "ERROR verifying issue number: ", data
+    print("ERROR verifying issue number: %r" % data)
 else:
-    print data.get("number")
+    print(data.get("number"))
 ')
         if ! echo $ISSUE_NUMBER | egrep -q '^[0-9]+$'; then
             echo "Error creating issue $ISSUE_NUMBER"
@@ -294,19 +296,11 @@ fi
 # endpoint => /repos/:user/:repo/issues/:id
 endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues/$ISSUE_NUMBER"
 ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" "$endpoint?access_token=$GITHUB_TOKEN"`
-ISSUE_STATE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-# open("/tmp/issue.json", "w").write(data)
-data = json.loads(data)
+ISSUE_STATE=$(echo $ISSUE_JSON | python_data_script '
 if "message" in data:
-    print "ERROR verifying issue number: ", data["message"]
+    print("ERROR verifying issue number: %r" % data["message"])
 else:
-    print data.get("state", "unknown-issue")
+    print(data.get("state", "unknown-issue"))
 ')
 [[ $? != 0 ]] && echo "unknown error $ISSUE_JSON" && exit 1
 [[ "$ISSUE_STATE" =~ "ERROR" ]] && echo $ISSUE_STATE && exit 1
@@ -316,16 +310,7 @@ if [ "$ISSUE_STATE" != "open" ]; then
     echo "Error: $BASE_ACCOUNT/$BASE_REPO issue $ISSUE_NUMBER is $ISSUE_STATE"
     exit 1;
 fi
-ISSUE_TITLE=$(echo $ISSUE_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
-print data["title"]
-')
+ISSUE_TITLE=$(echo $ISSUE_JSON | python_data_script 'print(data["title"])')
 [[ $? != 0 ]] && echo "unknown error extracting issue title $ISSUE_JSON" && exit 1
 
 
@@ -335,31 +320,17 @@ source_user=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $1}')
 endpoint="https://api.github.com/repos/$source_user/$BASE_REPO/branches"
 branch_name=$(echo "$FEATURE_BRANCH" | awk -F ':' '{print $NF}')
 BRANCHES_JSON=`curl --silent -H "Accept: application/vnd.github-branches.text+json,application/json" "$endpoint?access_token=$GITHUB_TOKEN"`
-BRANCH_EXISTS=$(echo $BRANCHES_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
+BRANCH_EXISTS=$(echo $BRANCHES_JSON | python_data_script '
 data = [x for x in data if x.get("name") == sys.argv[-1]]
-print len(data)
+print(len(data))
 ' "$branch_name")
 if [ "$BRANCH_EXISTS" != "1" ]; then
     echo ""
     echo "Error: branch ($branch_name) does not exist in $source_user/$BASE_REPO"
     echo -n -e "\tvalid branches are: "
-    echo $BRANCHES_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
+    echo $BRANCHES_JSON | python_data_script '
 data = [x.get("name") for x in data]
-print ", ".join(data)
+print(", ".join(data))
 '
     exit 1;
 fi
@@ -376,22 +347,14 @@ fi
 json="{\"issue\":$ISSUE_NUMBER, \"base\":\"$BASE_BRANCH\", \"head\":\"$FEATURE_BRANCH\"}"
 endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/pulls"
 PULL_JSON=`curl --silent -H "Accept: application/vnd.github-pull.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
-PULL_STATUS=$(echo $PULL_JSON | $PYTHON_CMD -c '
-try:
-    import simplejson as json
-except ImportError:
-    import json
-import sys
-data = sys.stdin.read().strip().replace("\n",r"\n").replace("\r","")
-data = json.loads(data)
+echo $PULL_JSON | python_data_script '
 pull_link = data.get("html_url")
 if not pull_link:
-    print "ERROR updating issue to a pull request: " + data.get("message")
+    print("ERROR updating issue to a pull request: " + data.get("message"))
     for error in data.get("errors", []):
         if error.get("message"):
-            print "  --> ERROR DETAIL: " + error.get("message")
+            print("  --> ERROR DETAIL: " + error.get("message"))
 else:
-    print "Pull Request Opened"
-    print pull_link
-')
-echo "$PULL_STATUS"
+    print("Pull Request Opened")
+    print(pull_link)
+'
