@@ -74,7 +74,7 @@ fi
 python_data_script() {
     local SCRIPT=$1
     local OPT_ARG=$2
-    
+
     $PYTHON_CMD -c "
 try:
     import json
@@ -246,10 +246,28 @@ fi
 if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
-        read -p "issue title: " ISSUE_TITLE
-        read -p "issue description: " ISSUE_DESCRIPTION
-        ISSUE_TITLE=$(json_escape "$ISSUE_TITLE")
-        ISSUE_DESCRIPTION=$(json_escape "$ISSUE_DESCRIPTION")
+        EDITOR=${EDITOR:-vi}
+        TMPFILE=$(mktemp -t "")
+
+        echo "
+
+# Please enter a title and description for your new issue. The first
+# line will be used as the issue title, and any subsequent lines will
+# be used as the issue description.
+#
+# Lines starting with '#' will be ignored.
+" > "$TMPFILE"
+
+        $EDITOR "$TMPFILE"
+        if [ $? -ne 0 ]; then
+            echo "error: there was a problem with the editor '$EDITOR'"
+            exit 1
+        fi
+        sed -e '/^#/d' -i '' "$TMPFILE"
+
+        ISSUE_TITLE=$(json_escape $(head -n 1 "$TMPFILE"))
+        ISSUE_DESCRIPTION=$(json_escape $(tail -n +2 "$TMPFILE"))
+
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
