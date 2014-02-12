@@ -87,6 +87,17 @@ $SCRIPT
 " $OPT_ARG
 }
 
+json_escape() {
+    echo "$1" | $PYTHON_CMD -c "
+import sys
+try:
+    import json
+except ImportError:
+    import simplejson as json
+sys.stdout.write(json.dumps(sys.stdin.read().rstrip()))
+"
+}
+
 # grab defaults where we can
 #####################
 BASE_ACCOUNT=`$GIT_CMD config --get gitOpenPull.baseAccount`
@@ -237,8 +248,10 @@ if [ -z "$ISSUE_NUMBER" ]; then
     if [ "$ISSUE_NUMBER" == "c" ]; then
         read -p "issue title: " ISSUE_TITLE
         read -p "issue description: " ISSUE_DESCRIPTION
+        ISSUE_TITLE=$(json_escape "$ISSUE_TITLE")
+        ISSUE_DESCRIPTION=$(json_escape "$ISSUE_DESCRIPTION")
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
-        json="{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_DESCRIPTION\"}"
+        json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
         ISSUE_NUMBER=$(echo $ISSUE_JSON | python_data_script '
 if "number" not in data:
