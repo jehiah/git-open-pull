@@ -30,6 +30,7 @@ HELP_TEXT='
        -b --base      - the branch you want your changes pulled into. default: master
        --base-account - the account containing issue and the base branch to merge into
        --base-repo    - the github repository name
+       -e --editor    - open $EDITOR to create new issues
 
        feature-branch - the branch (or git ref) where your changes are implemented
                         feature branch is assumed to be user/feature-branch if no
@@ -74,7 +75,7 @@ fi
 python_data_script() {
     local SCRIPT=$1
     local OPT_ARG=$2
-    
+
     $PYTHON_CMD -c "
 try:
     import json
@@ -88,13 +89,21 @@ $SCRIPT
 }
 
 json_escape() {
-    echo "$1" | $PYTHON_CMD -c "
+    $PYTHON_CMD -c "
 import sys
 try:
     import json
 except ImportError:
     import simplejson as json
-sys.stdout.write(json.dumps(sys.stdin.read().rstrip()))
+sys.stdout.write(json.dumps(sys.stdin.read().strip()))
+"
+}
+
+make_tmp_file() {
+    $PYTHON_CMD -c "
+import tempfile, sys
+_, path = tempfile.mkstemp()
+sys.stdout.write(path)
 "
 }
 
@@ -115,6 +124,7 @@ if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
         ISSUE_NUMBER=""
     fi
 fi
+USE_EDITOR=`$GIT_CMD config --get gitOpenPull.useEditor`
 
 
 # parse the command line args
@@ -170,6 +180,10 @@ while [ $# -gt 0 ]; do
         -h | --help)
             printf "%s" "$HELP_TEXT"
             exit
+            ;;
+        -e | --editor)
+            USE_EDITOR="1"
+            $SHIFT
             ;;
         * )
             FEATURE_BRANCH="$1"
@@ -246,10 +260,37 @@ fi
 if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
-        read -p "issue title: " ISSUE_TITLE
-        read -p "issue description: " ISSUE_DESCRIPTION
-        ISSUE_TITLE=$(json_escape "$ISSUE_TITLE")
-        ISSUE_DESCRIPTION=$(json_escape "$ISSUE_DESCRIPTION")
+
+        if [ -z "$USE_EDITOR" ]; then
+            read -p "issue title: " ISSUE_TITLE
+            read -p "issue description: " ISSUE_DESCRIPTION
+        else
+            EDITOR=${EDITOR:-vi}
+            TMPFILE=$(make_tmp_file)
+
+            echo "
+
+# Please enter a title and description for your new issue. The first
+# line will be used as the issue title, and any subsequent lines will
+# be used as the issue description.
+#
+# Lines starting with '#' will be ignored." > "$TMPFILE"
+
+            $EDITOR "$TMPFILE"
+            if [ $? -ne 0 ]; then
+                echo "error: there was a problem with the editor '$EDITOR'"
+                exit 1
+            fi
+
+            RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+            rm "$TMPFILE"
+            ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
+            ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
+        fi
+
+        ISSUE_TITLE=$(echo "$ISSUE_TITLE" | json_escape)
+        ISSUE_DESCRIPTION=$(echo "$ISSUE_DESCRIPTION" | json_escape)
+
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
