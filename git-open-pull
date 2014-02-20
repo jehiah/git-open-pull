@@ -263,18 +263,17 @@ if [ -z "$ISSUE_NUMBER" ]; then
 # line will be used as the issue title, and any subsequent lines will
 # be used as the issue description.
 #
-# Lines starting with '#' will be ignored.
-" > "$TMPFILE"
+# Lines starting with '#' will be ignored." > "$TMPFILE"
 
         $EDITOR "$TMPFILE"
         if [ $? -ne 0 ]; then
             echo "error: there was a problem with the editor '$EDITOR'"
             exit 1
         fi
-        sed -e '/^#/d' -i '' "$TMPFILE"
 
-        ISSUE_TITLE=$(head -n 1 "$TMPFILE" | json_escape)
-        ISSUE_DESCRIPTION=$(tail -n +2 "$TMPFILE" | json_escape)
+        RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+        ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1 | json_escape)
+        ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2 | json_escape)
 
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
