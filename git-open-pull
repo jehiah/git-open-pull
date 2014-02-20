@@ -98,6 +98,14 @@ sys.stdout.write(json.dumps(sys.stdin.read().rstrip()))
 "
 }
 
+make_tmp_file() {
+    $PYTHON_CMD -c "
+import tempfile, sys
+_, path = tempfile.mkstemp()
+sys.stdout.write(path)
+"
+}
+
 # grab defaults where we can
 #####################
 BASE_ACCOUNT=`$GIT_CMD config --get gitOpenPull.baseAccount`
@@ -247,7 +255,7 @@ if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
         EDITOR=${EDITOR:-vi}
-        TMPFILE=$(mktemp -t "")
+        TMPFILE=$(make_tmp_file)
 
         echo "
 
