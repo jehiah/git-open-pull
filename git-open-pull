@@ -88,13 +88,13 @@ $SCRIPT
 }
 
 json_escape() {
-    echo "$1" | $PYTHON_CMD -c "
+    $PYTHON_CMD -c "
 import sys
 try:
     import json
 except ImportError:
     import simplejson as json
-sys.stdout.write(json.dumps(sys.stdin.read().rstrip()))
+sys.stdout.write(json.dumps(sys.stdin.read().strip()))
 "
 }
 
@@ -273,8 +273,8 @@ if [ -z "$ISSUE_NUMBER" ]; then
         fi
         sed -e '/^#/d' -i '' "$TMPFILE"
 
-        ISSUE_TITLE=$(json_escape $(head -n 1 "$TMPFILE"))
-        ISSUE_DESCRIPTION=$(json_escape $(tail -n +2 "$TMPFILE"))
+        ISSUE_TITLE=$(head -n 1 "$TMPFILE" | json_escape)
+        ISSUE_DESCRIPTION=$(tail -n +2 "$TMPFILE" | json_escape)
 
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
