@@ -30,6 +30,7 @@ HELP_TEXT='
        -b --base      - the branch you want your changes pulled into. default: master
        --base-account - the account containing issue and the base branch to merge into
        --base-repo    - the github repository name
+       -e --editor    - open $EDITOR to create new issues
 
        feature-branch - the branch (or git ref) where your changes are implemented
                         feature branch is assumed to be user/feature-branch if no
@@ -123,6 +124,7 @@ if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
         ISSUE_NUMBER=""
     fi
 fi
+USE_EDITOR=`$GIT_CMD config --get gitOpenPull.useEditor`
 
 
 # parse the command line args
@@ -178,6 +180,10 @@ while [ $# -gt 0 ]; do
         -h | --help)
             printf "%s" "$HELP_TEXT"
             exit
+            ;;
+        -e | --editor)
+            USE_EDITOR="1"
+            $SHIFT
             ;;
         * )
             FEATURE_BRANCH="$1"
@@ -254,10 +260,15 @@ fi
 if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
-        EDITOR=${EDITOR:-vi}
-        TMPFILE=$(make_tmp_file)
 
-        echo "
+        if [ -z "$USE_EDITOR" ]; then
+            read -p "issue title: " ISSUE_TITLE
+            read -p "issue description: " ISSUE_DESCRIPTION
+        else
+            EDITOR=${EDITOR:-vi}
+            TMPFILE=$(make_tmp_file)
+
+            echo "
 
 # Please enter a title and description for your new issue. The first
 # line will be used as the issue title, and any subsequent lines will
@@ -265,15 +276,19 @@ if [ -z "$ISSUE_NUMBER" ]; then
 #
 # Lines starting with '#' will be ignored." > "$TMPFILE"
 
-        $EDITOR "$TMPFILE"
-        if [ $? -ne 0 ]; then
-            echo "error: there was a problem with the editor '$EDITOR'"
-            exit 1
+            $EDITOR "$TMPFILE"
+            if [ $? -ne 0 ]; then
+                echo "error: there was a problem with the editor '$EDITOR'"
+                exit 1
+            fi
+
+            RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+            ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
+            ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
         fi
 
-        RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
-        ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1 | json_escape)
-        ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2 | json_escape)
+        ISSUE_TITLE=$(echo "$ISSUE_TITLE" | json_escape)
+        ISSUE_DESCRIPTION=$(echo "$ISSUE_DESCRIPTION" | json_escape)
 
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
