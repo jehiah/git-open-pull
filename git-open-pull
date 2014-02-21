@@ -283,6 +283,7 @@ if [ -z "$ISSUE_NUMBER" ]; then
             fi
 
             RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+            rm "$TMPFILE"
             ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
             ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
         fi
