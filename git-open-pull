@@ -91,10 +91,19 @@ if sys.argv[1] == "json_escape":
     # take either a second argument, or stdin
     input_txt = None
     if len(sys.argv) > 2:
-        input_txt = sys.argv[2]
+        input_txt = sys.argv[2].strip()
     else:
         input_txt = sys.stdin.read().strip()
     sys.stdout.write(json.dumps(input_txt))
+    sys.exit(0)
+
+if sys.argv[1] == "selected_labels":
+    labels = []
+    for line in open(sys.argv[2], "r"):
+        if line.lstrip().startswith("Label:"):
+            labels.append(line.strip()[6:].strip())
+    if labels:
+        sys.stdout.write(json.dumps(labels))
     sys.exit(0)
 
 # all following commands take a json blob as the second argument
@@ -127,6 +136,13 @@ if sys.argv[1] == "check_pull_request":
     else:
         print("Pull Request Opened")
         print(pull_link)
+
+if sys.argv[1] == "format_labels":
+    labels = [x["name"] for x in data]
+    if labels:
+        print ("\n# Uncomment to assign labels\n")
+        for name in labels:
+            print("# Label: %s" % name)
 
 ' "$@"
 }
@@ -282,15 +298,22 @@ if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
 
-          TMPFILE=$(make_tmp_file)
+        TMPFILE=$(make_tmp_file)
 
-          echo "
+        echo "
 
+" > "$TMPFILE"
+
+        endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/labels"
+        REPO_LABELS_JSON=`curl --silent -H "Accept: application/json" "$endpoint?access_token=$GITHUB_TOKEN"`
+        python_helper format_labels "$REPO_LABELS_JSON" >> "$TMPFILE"
+
+        echo "
 # Please enter a title and description for your new issue. The first
 # line will be used as the issue title, and any subsequent lines will
 # be used as the issue description.
 #
-# Lines starting with '#' will be ignored." > "$TMPFILE"
+# Lines starting with '#' will be ignored." >> "$TMPFILE"
 
         $GIT_EDITOR "$TMPFILE"
         if [ $? -ne 0 ]; then
@@ -298,8 +321,10 @@ if [ -z "$ISSUE_NUMBER" ]; then
             exit 1
         fi
 
-        RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+        RAW_ISSUE=$(egrep -v "^(#|\s?Label:)" "$TMPFILE")
+        SELECTED_LABELS=$(python_helper selected_labels "$TMPFILE")
         rm "$TMPFILE"
+
         ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
         ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
 
@@ -316,6 +341,12 @@ if [ -z "$ISSUE_NUMBER" ]; then
         fi
 
         echo "created issue $ISSUE_NUMBER"
+        
+        if [ -n "$SELECTED_LABELS" ]; then
+            endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues/$ISSUE_NUMBER/labels"
+            LABEL_CHANGE_JSON=`curl --silent -H "Accept: application/json" --data-binary "$SELECTED_LABELS" "$endpoint?access_token=$GITHUB_TOKEN"`
+            echo "set labels $SELECTED_LABELS"
+        fi
     fi
 else
     read -p "issue number [$ISSUE_NUMBER]: " temp
