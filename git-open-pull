@@ -74,7 +74,7 @@ fi
 python_data_script() {
     local SCRIPT=$1
     local OPT_ARG=$2
-    
+
     $PYTHON_CMD -c "
 try:
     import json
@@ -88,13 +88,21 @@ $SCRIPT
 }
 
 json_escape() {
-    echo "$1" | $PYTHON_CMD -c "
+    $PYTHON_CMD -c "
 import sys
 try:
     import json
 except ImportError:
     import simplejson as json
-sys.stdout.write(json.dumps(sys.stdin.read().rstrip()))
+sys.stdout.write(json.dumps(sys.stdin.read().strip()))
+"
+}
+
+make_tmp_file() {
+    $PYTHON_CMD -c "
+import tempfile, sys
+_, path = tempfile.mkstemp()
+sys.stdout.write(path)
 "
 }
 
@@ -106,6 +114,11 @@ BASE_BRANCH=`$GIT_CMD config --get gitOpenPull.base || echo "master"`
 GITHUB_USER=`$GIT_CMD config --get github.user`
 GITHUB_PASSWORD=`$GIT_CMD config --get github.password`
 GITHUB_TOKEN=`$GIT_CMD config --get gitOpenPull.token`
+GIT_EDITOR=`$GIT_CMD config --get core.editor`
+if [ -z "$GIT_EDITOR" ]; then
+  GIT_EDITOR="$EDITOR"
+fi
+  
 FEATURE_BRANCH=`$GIT_CMD rev-parse --abbrev-ref HEAD`
 ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/.*[-_]([0-9]+)$/\1/'`
 if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
@@ -246,10 +259,32 @@ fi
 if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
-        read -p "issue title: " ISSUE_TITLE
-        read -p "issue description: " ISSUE_DESCRIPTION
-        ISSUE_TITLE=$(json_escape "$ISSUE_TITLE")
-        ISSUE_DESCRIPTION=$(json_escape "$ISSUE_DESCRIPTION")
+
+          EDITOR=${EDITOR:-vi}
+          TMPFILE=$(make_tmp_file)
+
+          echo "
+
+# Please enter a title and description for your new issue. The first
+# line will be used as the issue title, and any subsequent lines will
+# be used as the issue description.
+#
+# Lines starting with '#' will be ignored." > "$TMPFILE"
+
+        $GIT_EDITOR "$TMPFILE"
+        if [ $? -ne 0 ]; then
+            echo "error: there was a problem with the editor '$GIT_EDITOR'"
+            exit 1
+        fi
+
+        RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+        rm "$TMPFILE"
+        ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
+        ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
+
+        ISSUE_TITLE=$(echo "$ISSUE_TITLE" | json_escape)
+        ISSUE_DESCRIPTION=$(echo "$ISSUE_DESCRIPTION" | json_escape)
+
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
         json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
