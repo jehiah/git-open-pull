@@ -30,7 +30,6 @@ HELP_TEXT='
        -b --base      - the branch you want your changes pulled into. default: master
        --base-account - the account containing issue and the base branch to merge into
        --base-repo    - the github repository name
-       -e --editor    - open $EDITOR to create new issues
 
        feature-branch - the branch (or git ref) where your changes are implemented
                         feature branch is assumed to be user/feature-branch if no
@@ -115,6 +114,11 @@ BASE_BRANCH=`$GIT_CMD config --get gitOpenPull.base || echo "master"`
 GITHUB_USER=`$GIT_CMD config --get github.user`
 GITHUB_PASSWORD=`$GIT_CMD config --get github.password`
 GITHUB_TOKEN=`$GIT_CMD config --get gitOpenPull.token`
+GIT_EDITOR=`$GIT_CMD config --get core.editor`
+if [ -z "$GIT_EDITOR" ]; then
+  GIT_EDITOR="$EDITOR"
+fi
+  
 FEATURE_BRANCH=`$GIT_CMD rev-parse --abbrev-ref HEAD`
 ISSUE_NUMBER=`echo $FEATURE_BRANCH | perl -p -e 's/.*[-_]([0-9]+)$/\1/'`
 if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
@@ -124,7 +128,6 @@ if [ "$ISSUE_NUMBER" == "$FEATURE_BRANCH" ]; then
         ISSUE_NUMBER=""
     fi
 fi
-USE_EDITOR=`$GIT_CMD config --get gitOpenPull.useEditor`
 
 
 # parse the command line args
@@ -180,10 +183,6 @@ while [ $# -gt 0 ]; do
         -h | --help)
             printf "%s" "$HELP_TEXT"
             exit
-            ;;
-        -e | --editor)
-            USE_EDITOR="1"
-            $SHIFT
             ;;
         * )
             FEATURE_BRANCH="$1"
@@ -261,14 +260,10 @@ if [ -z "$ISSUE_NUMBER" ]; then
     read -p "enter issue number (or 'c' to create): " ISSUE_NUMBER
     if [ "$ISSUE_NUMBER" == "c" ]; then
 
-        if [ -z "$USE_EDITOR" ]; then
-            read -p "issue title: " ISSUE_TITLE
-            read -p "issue description: " ISSUE_DESCRIPTION
-        else
-            EDITOR=${EDITOR:-vi}
-            TMPFILE=$(make_tmp_file)
+          EDITOR=${EDITOR:-vi}
+          TMPFILE=$(make_tmp_file)
 
-            echo "
+          echo "
 
 # Please enter a title and description for your new issue. The first
 # line will be used as the issue title, and any subsequent lines will
@@ -276,17 +271,16 @@ if [ -z "$ISSUE_NUMBER" ]; then
 #
 # Lines starting with '#' will be ignored." > "$TMPFILE"
 
-            $EDITOR "$TMPFILE"
-            if [ $? -ne 0 ]; then
-                echo "error: there was a problem with the editor '$EDITOR'"
-                exit 1
-            fi
-
-            RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
-            rm "$TMPFILE"
-            ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
-            ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
+        $GIT_EDITOR "$TMPFILE"
+        if [ $? -ne 0 ]; then
+            echo "error: there was a problem with the editor '$GIT_EDITOR'"
+            exit 1
         fi
+
+        RAW_ISSUE=$(grep -v "^#" "$TMPFILE")
+        rm "$TMPFILE"
+        ISSUE_TITLE=$(echo "$RAW_ISSUE" | head -n 1)
+        ISSUE_DESCRIPTION=$(echo "$RAW_ISSUE" | tail -n +2)
 
         ISSUE_TITLE=$(echo "$ISSUE_TITLE" | json_escape)
         ISSUE_DESCRIPTION=$(echo "$ISSUE_DESCRIPTION" | json_escape)
