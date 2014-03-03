@@ -141,7 +141,7 @@ if sys.argv[1] == "format_labels":
     labels = [x["name"] for x in data]
     if labels:
         print ("\n# Uncomment to assign labels\n")
-        for name in labels:
+        for name in sorted(labels):
             print("# Label: %s" % name)
 
 ' "$@"
