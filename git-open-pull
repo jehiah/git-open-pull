@@ -117,7 +117,7 @@ if sys.argv[1] == "get_field":
     sys.exit(1)
 
 if sys.argv[1] == "count_branches":
-    matches = [x for x in data if x.get("name") == sys.argv[3]]
+    matches = [x for x in data if x.get("name") == sys.argv[3].decode("utf8", "ignore")]
     print(len(matches))
     sys.exit(0)
 
