@@ -330,9 +330,10 @@ if [ -z "$ISSUE_NUMBER" ]; then
 
         ISSUE_TITLE=$(python_helper json_escape "$ISSUE_TITLE")
         ISSUE_DESCRIPTION=$(python_helper json_escape "$ISSUE_DESCRIPTION")
+        ASSIGNEE=$(python_helper json_escape "$GITHUB_USER")
 
         endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues"
-        json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION}"
+        json="{\"title\": $ISSUE_TITLE, \"body\": $ISSUE_DESCRIPTION, \"assignee\": $ASSIGNEE}"
         ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
         ISSUE_NUMBER=$(python_helper get_field "$ISSUE_JSON" number)
         if [ $? != 0 ] || [ -z "ISSUE_NUMBER" ] ; then
@@ -436,3 +437,15 @@ json="{\"issue\":$ISSUE_NUMBER, \"base\":\"$BASE_BRANCH\", \"head\":\"$FEATURE_B
 endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/pulls"
 PULL_JSON=`curl --silent -H "Accept: application/vnd.github-pull.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
 python_helper check_pull_request "$PULL_JSON"
+
+# assign
+# endpoint => /repos/:user/:repo/issues/:id
+endpoint="https://api.github.com/repos/$BASE_ACCOUNT/$BASE_REPO/issues/$ISSUE_NUMBER"
+ASSIGNEE=$(python_helper json_escape "$GITHUB_USER")
+json="{\"assignee\": $ASSIGNEE}"
+ISSUE_JSON=`curl --silent -H "Accept: application/vnd.github-issue.text+json,application/json" --data-binary "$json" "$endpoint?access_token=$GITHUB_TOKEN"`
+ISSUE_STATE=$(python_helper get_field "$ISSUE_JSON" state)
+if [ $? != 0 ] || [ -z "$ISSUE_STATE" ]; then
+    echo "Error verifying issue number: $ISSUE_JSON"
+    exit 1
+fi
