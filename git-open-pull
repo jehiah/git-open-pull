@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # git-open-pull Copyright 2011 Jehiah Czebotar <jehiah@gmail.com>
-# http://github.com/jehiah/git-open-pull
+# https://github.com/jehiah/git-open-pull
 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
 ## GNU General Public License for more details.
 ##
 ## You can find the GNU General Public License at:
-## http://www.gnu.org/licenses/
+## https://www.gnu.org/licenses/
 
 HELP_TEXT='
  USAGE
@@ -56,7 +56,7 @@ HELP_TEXT='
        against master in the integration account
 
        This makes use of the github `POST /repos/:user/:repo/pulls` endpoint
-       more info on that is available at http://developer.github.com/v3/pulls/
+       more info on that is available at https://developer.github.com/v3/pulls/
 
 '
 
