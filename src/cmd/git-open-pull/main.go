@@ -1,9 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"log"
 )
 
 func main() {
-	fmt.Println("not implemented yet")
+	ctx := context.Background()
+	settings, err := LoadSettings(ctx)
+	if err != nil {
+		log.Fatalf("%s", err)
+	}
+	log.Printf("%#v", settings)
 }
