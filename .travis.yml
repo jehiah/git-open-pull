@@ -1,0 +1,13 @@
+language: go
+go:
+  - 1.8
+install:
+  - go get github.com/constabulary/gb/...
+  - ./vendor.sh
+script:
+  - gb test
+  - gb build
+sudo: false
+notifications:
+  email: false
+
