@@ -15,6 +15,7 @@ type Settings struct {
 	BaseAccount string
 	BaseRepo    string
 	BaseBranch  string
+	Editor      string
 }
 
 func RunGit(ctx context.Context, arg ...string) ([]byte, error) {
@@ -25,12 +26,13 @@ func RunGit(ctx context.Context, arg ...string) ([]byte, error) {
 // LoadSettings extracts the git and gitOpenPull sections from $HOME/.gitconfig and .git/config
 func LoadSettings(ctx context.Context) (*Settings, error) {
 
-	body, err := RunGit(ctx, "config", "--get-regexp", "(github|gitOpenPull).*")
+	body, err := RunGit(ctx, "config", "--get-regexp", "(github|gitOpenPull|core).*")
 	if err != nil {
 		return nil, err
 	}
 	s := Settings{
 		BaseBranch: "master",
+		Editor:     "vi",
 	}
 	scanner := bufio.NewScanner(bytes.NewBuffer(body))
 	for scanner.Scan() {
@@ -49,9 +51,16 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 			s.BaseRepo = line[1]
 		case "gitopenpull.base":
 			s.BaseBranch = line[1]
+		case "core.editor":
+			s.Editor = line[1]
 		}
 	}
 
 	return &s, scanner.Err()
 
+}
+
+func GitFeatureBranch(ctx context.Context) (string, error) {
+	body, err := RunGit(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+	return string(body), err
 }
