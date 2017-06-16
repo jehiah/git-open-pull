@@ -26,13 +26,13 @@ func RunGit(ctx context.Context, arg ...string) ([]byte, error) {
 // LoadSettings extracts the git and gitOpenPull sections from $HOME/.gitconfig and .git/config
 func LoadSettings(ctx context.Context) (*Settings, error) {
 
-	body, err := RunGit(ctx, "config", "--get-regexp", "(github|gitOpenPull|core).*")
+	body, err := RunGit(ctx, "config", "-l")
 	if err != nil {
 		return nil, err
 	}
 	s := Settings{
 		BaseBranch: "master",
-		Editor:     "vi",
+		Editor:     "/usr/bin/vi",
 	}
 	scanner := bufio.NewScanner(bytes.NewBuffer(body))
 	for scanner.Scan() {
