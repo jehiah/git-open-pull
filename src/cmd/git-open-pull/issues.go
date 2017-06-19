@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"sort"
@@ -45,7 +47,7 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 
 	// write commit history
 	io.WriteString(tempFile, "\n# Uncomment to assign labels\n")
-	for l, _ := range labels {
+	for _, l := range labels {
 		fmt.Fprintf(tempFile, "# Label: %s\n", l)
 	}
 
@@ -56,19 +58,52 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 #
 # Lines starting with '#' will be ignored.`)
 
+	tempFile.Sync()
+	tempFile.Close()
 	cmd := exec.CommandContext(ctx, settings.Editor, tempFile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
 		tempFile.Close()
-		os.Remove(tempFile.Name())
+		// os.Remove(tempFile.Name())
 		return 0, err
 	}
-	tempFile.Seek(0, 0)
+	tempFile, err = os.Open(tempFile.Name())
+	if err != nil {
+		return 0, err
+	}
 
-	// TODO: read the template
-	// parse out the comments
-	// parse out the labels
-	// parse the title and description
+	var title string
+	var descriptions, selectedLabels []string
+	scanner := bufio.NewScanner(tempFile)
+	for scanner.Scan() {
+		log.Printf("line %#v", scanner.Text())
+		line := strings.TrimSpace(scanner.Text())
+		switch {
+		case strings.HasPrefix(line, "Label:"):
+			label := strings.TrimSpace(line[len("Label:"):])
+			if label != "" {
+				selectedLabels = append(selectedLabels, label)
+			}
+		case strings.HasPrefix(line, "#"):
+		case title == "" && line != "":
+			title = line
+		default:
+			descriptions = append(descriptions, strings.TrimRight(scanner.Text(), " \t\r\n"))
+		}
+
+		if err := scanner.Err(); err != nil {
+			return 0, err
+		}
+	}
+	description := strings.TrimSpace(strings.Join(descriptions, "\n"))
+
+	log.Printf("title:%#v", title)
+	log.Printf("description:%#v", description)
+	log.Printf("labels:%#v", selectedLabels)
+
 	// create issue
 
 	return 0, fmt.Errorf("not implemented")
