@@ -36,7 +36,7 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 	}
 	scanner := bufio.NewScanner(bytes.NewBuffer(body))
 	for scanner.Scan() {
-		line := strings.SplitN(strings.TrimSpace(scanner.Text()), " ", 2)
+		line := strings.SplitN(strings.TrimSpace(scanner.Text()), "=", 2)
 		if len(line) != 2 {
 			return nil, fmt.Errorf("Invalid line %#v", line)
 		}
