@@ -33,10 +33,12 @@ func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settin
 		if err != nil {
 			return issue, err
 		}
-		if strings.ToLower(n) == "c" {
+		switch n {
+		case "", "c", "C":
 			return NewIssue(ctx, client, settings)
+		default:
+			return strconv.Atoi(n)
 		}
-		return strconv.Atoi(n)
 	}
 	n, err := input.Ask(fmt.Sprintf("issue number [%d]", detected), "")
 	if err != nil {
@@ -89,6 +91,9 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
+		case "n", "N":
+		default:
+			log.Fatalf("unknown response %q", yn)
 		}
 	}
 

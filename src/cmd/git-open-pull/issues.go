@@ -45,6 +45,13 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 	fmt.Printf("drafting %s\n", tempFile.Name())
 	defer os.Remove(tempFile.Name())
 
+	
+	// git fetch $remote +refs/heads/master:master
+	// fetch master
+	// Find MERGE_BASE
+	// print each commit message
+	
+
 	// write commit history
 	io.WriteString(tempFile, "\n# Uncomment to assign labels\n")
 	for _, l := range labels {
