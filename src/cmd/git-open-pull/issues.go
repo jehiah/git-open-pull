@@ -97,8 +97,9 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 	// pre process template
 	if settings.PreProcess != "" {
 		cmd := exec.CommandContext(ctx, settings.PreProcess, tempFile.Name())
-		err = cmd.Run()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
+			log.Printf("error running pre process template: %s:\n  %s", settings.PreProcess, out)
 			return 0, err
 		}
 	}
@@ -120,8 +121,9 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 	// post process template
 	if settings.PostProcess != "" {
 		cmd = exec.CommandContext(ctx, settings.PostProcess, tempFile.Name())
-		err = cmd.Run()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
+			log.Printf("error running post process template: %s:\n  %s", settings.PostProcess, out)
 			return 0, err
 		}
 	}

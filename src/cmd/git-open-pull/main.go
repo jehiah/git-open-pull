@@ -208,8 +208,9 @@ func main() {
 		}
 
 		cmd := exec.CommandContext(ctx, settings.Callback, tempFile.Name())
-		err = cmd.Run()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
+			log.Printf("error on callback: %s:\n   %s", settings.Callback, out)
 			log.Fatal(err)
 		}
 	}
