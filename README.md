@@ -1,7 +1,7 @@
 git open-pull 
 -------------
 
-converts creates a pull request from the command line, or attaches a branch to an open github issue converting it into a pull request.
+Create a pull request from the command line, or attach a branch to an open GitHub issue converting it into a pull request.
 
 ### USAGE
 
@@ -10,8 +10,8 @@ converts creates a pull request from the command line, or attaches a branch to a
 ### CONFIGURATION
 
 If available, git-open-pull will use the following config values. When not available
-They will be requested on the command line. Note storing your git password this way is
-not secure.
+They will be requested on the command line. Note: storing your GitHub API credentials this way is
+not secure. Your API credentials will be stored in plain text.
 
     [github]
         user = ....
@@ -36,9 +36,8 @@ Hooks. git-open-pull provides the ability to modify an issue template (preProces
 ### ABOUT
 
 Because the ideal workflow is `issue -> branch -> pull request` this script
-takes a github issue and turns it into a pull request based on your branch
+takes a GitHub issue and turns it into a pull request based on your branch
 against master in the integration account
-
 
 ### Building From Source
 
