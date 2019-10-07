@@ -4,10 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"input"
+	"github.com/jehiah/git-open-pull/internal/input"
 )
 
 type Settings struct {
@@ -102,7 +103,7 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 			return nil, err
 		}
 		if s.User == "" {
-			return nil, fmt.Errorf("GitHub username required. Set `git config --global github.user $USER`", "")
+			return nil, errors.New("GitHub username required. Set `git config --global github.user $USER`")
 		}
 		_, err = RunGit(ctx, "config", "--global", "github.user", s.User)
 		if err != nil {
