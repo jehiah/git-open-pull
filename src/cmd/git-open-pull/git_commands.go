@@ -10,7 +10,11 @@ import (
 func RunGit(ctx context.Context, arg ...string) ([]byte, error) {
 	// log.Printf("run git %s", strings.Join(arg, " "))
 	cmd := exec.CommandContext(ctx, "git", arg...)
-	return cmd.Output()
+	body, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s running \"git %s\"", err, strings.Join(arg, " "))
+	}
+	return body, nil
 }
 
 func GitFeatureBranch(ctx context.Context) (string, error) {
