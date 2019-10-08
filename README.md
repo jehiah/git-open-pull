@@ -7,6 +7,16 @@ Create a pull request from the command line, or attach a branch to an open GitHu
 
    $ git open-pull
 
+
+### Installing
+
+
+Install from source, or visit the [releases page](https://github.com/jehiah/git-open-pull/releases)
+
+```
+go get -u github.com/jehiah/git-open-pull
+````
+
 ### CONFIGURATION
 
 If available, git-open-pull will use the following config values. When not available
@@ -41,10 +51,8 @@ against master in the integration account
 
 ### Building From Source
 
-This project uses [gb](https://getgb.io/) the Go Build tool, and has a `vendor.sh` to manage dependencies. 
+This project uses Go Modules to manage dependencies. 
 
 ```
-go get github.com/constabulary/gb/...
-./vendor.sh
-gb build
+go build
 ```

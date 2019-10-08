@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
+	"github.com/jehiah/git-open-pull/internal/input"
 	"golang.org/x/oauth2"
-	"input"
 )
 
 func SetupClient(ctx context.Context, s *Settings) *github.Client {
