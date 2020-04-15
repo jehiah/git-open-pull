@@ -31,19 +31,67 @@ func DetectIssueNumber(branch string) int {
 	return 0
 }
 
-// NewIssue creates a template, parses the template and returns the Issue number
-func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (issueNumber int, err error) {
-	labels, err := Labels(ctx, client, settings)
+func NewIssue(ctx context.Context, client *github.Client, settings *Settings, interactive bool, title, description string, labels []string) (issueNumber int, err error) {
+	var gir *github.IssueRequest
+	if interactive {
+		gir, err = PopulateIssueInteractive(ctx, client, settings, title, description, labels)
+		if err != nil {
+			log.Fatalf("Interactive issue creation failed: %v", err)
+		}
+
+	} else {
+		if title == "" {
+			log.Fatal("title cannot be empty")
+		}
+
+		gir = &github.IssueRequest{
+			Title:    &title,
+			Body:     &description,
+			Assignee: &settings.User,
+		}
+
+		if labels != nil {
+			gir.Labels = &labels
+		}
+	}
+
+	i, _, err := client.Issues.Create(ctx, settings.BaseAccount, settings.BaseRepo, gir)
 	if err != nil {
 		return 0, err
 	}
 
+	if interactive {
+		fmt.Printf("Created issue %d (%s)\n", *i.Number, *i.Title)
+	}
+
+	return *i.Number, nil
+}
+
+// PopulateIssueInteractive creates a template, parses the template and returns the Issue number if the user is in interactive mode
+func PopulateIssueInteractive(ctx context.Context, client *github.Client, settings *Settings, inputTitle, inputDescription string, labelSlice []string) (ir *github.IssueRequest, err error) {
+	labels, err := Labels(ctx, client, settings)
+	if err != nil {
+		return nil, err
+	}
+
+	labelSet := make(map[string]bool)
+	for _, l := range labelSlice {
+		labelSet[l] = true
+	}
+
 	tempFile, err := ioutil.TempFile("", "git-open-pull")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	// fmt.Printf("drafting %s\n", tempFile.Name())
 	defer os.Remove(tempFile.Name())
+
+	if inputTitle != "" {
+		fmt.Fprintf(tempFile, "%s\n", inputTitle)
+	}
+	if inputDescription != "" {
+		fmt.Fprintf(tempFile, " * %s\n", inputDescription)
+	}
 
 	// seed template with commit history
 	mergeBase, err := MergeBase(ctx, settings)
@@ -60,7 +108,7 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 				// log.Printf("[%d] commit %s", i, c)
 				t, b, err := CommitDetails(ctx, c)
 				if err != nil {
-					return 0, err
+					return nil, err
 				}
 				if t == "" {
 					continue
@@ -81,6 +129,11 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 	}
 	io.WriteString(tempFile, "\n# Uncomment to assign labels\n")
 	for _, l := range labels {
+		// if labels are passed as command line input, uncomment them
+		if labelSet[l] {
+			fmt.Fprintf(tempFile, "Label: %s\n", l)
+			continue
+		}
 		fmt.Fprintf(tempFile, "# Label: %s\n", l)
 	}
 
@@ -100,7 +153,7 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Printf("error running pre process template: %s:\n  %s", settings.PreProcess, out)
-			return 0, err
+			return nil, err
 		}
 	}
 
@@ -112,10 +165,10 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 	if err != nil {
 		tempFile.Close()
 		// os.Remove(tempFile.Name())
-		return 0, err
+		return nil, err
 	}
 	if cmd.ProcessState != nil && !cmd.ProcessState.Success() {
-		return 0, fmt.Errorf("non-zero exit code from editor")
+		return nil, fmt.Errorf("non-zero exit code from editor")
 	}
 
 	// post process template
@@ -124,14 +177,14 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Printf("error running post process template: %s:\n  %s", settings.PostProcess, out)
-			return 0, err
+			return nil, err
 		}
 	}
 
 	// re-open the temp file
 	tempFile, err = os.Open(tempFile.Name())
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	var title string
@@ -154,13 +207,19 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 		}
 
 		if err := scanner.Err(); err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
-	description := strings.TrimSpace(strings.Join(descriptions, "\n"))
+
+	var description string
+	if inputDescription != "" {
+		description = inputDescription
+	} else {
+		description = strings.TrimSpace(strings.Join(descriptions, "\n"))
+	}
 
 	if title == "" {
-		return 0, fmt.Errorf("missing title")
+		return nil, fmt.Errorf("missing title")
 	}
 
 	issue := &github.IssueRequest{
@@ -174,15 +233,7 @@ func NewIssue(ctx context.Context, client *github.Client, settings *Settings) (i
 		issue.Labels = &selectedLabels
 	}
 
-	i, _, err := client.Issues.Create(ctx, settings.BaseAccount, settings.BaseRepo, issue)
-	if err != nil {
-		return 0, err
-	}
-	fmt.Printf("Created issue %d (%s)\n", *i.Number, *i.Title)
-	if len(selectedLabels) > 0 {
-		fmt.Printf("\tLabels: %s\n", strings.Join(selectedLabels, ", "))
-	}
-	return *i.Number, nil
+	return issue, nil
 }
 
 // Labels returns all of the labels for a given repo

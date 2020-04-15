@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,12 +10,22 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/github"
 	"github.com/jehiah/git-open-pull/internal/input"
 	"golang.org/x/oauth2"
 )
+
+func RenameBranch(ctx context.Context, branch string, issueNumber int) (string, error) {
+	branch = fmt.Sprintf("%s_%d", branch, issueNumber)
+	_, err := RunGit(ctx, "branch", "-m", branch)
+	if err != nil {
+		return "", err
+	}
+	return branch, nil
+}
 
 func SetupClient(ctx context.Context, s *Settings) *github.Client {
 	if s == nil {
@@ -30,16 +41,20 @@ func SetupClient(ctx context.Context, s *Settings) *github.Client {
 }
 
 // GetIssueNumber prompts to create a new issue, or confirmation of auto-detected issue number
-func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settings, detected int) (int, error) {
+func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settings, detected int, interactive bool, title, description string, labels []string) (int, error) {
 	var issue int
 	if detected == 0 {
-		n, err := input.Ask("enter issue number (or 'c' to create)", "")
-		if err != nil {
-			return issue, err
+		var err error
+		n := "c"
+		if interactive {
+			n, err = input.Ask("enter issue number (or 'c' to create)", "")
+			if err != nil {
+				return issue, err
+			}
 		}
 		switch n {
 		case "", "c", "C":
-			return NewIssue(ctx, client, settings)
+			return NewIssue(ctx, client, settings, interactive, title, description, labels)
 		default:
 			return strconv.Atoi(n)
 		}
@@ -55,7 +70,15 @@ func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settin
 }
 
 func main() {
-	if len(os.Args) > 1 {
+	description := flag.String("description-file", "", "Path to PR description file")
+	labels := flag.String("labels", "", "Comma separated PR Labels")
+	title := flag.String("title", "", "PR Title")
+	interactive := flag.Bool("interactive", true, "Toggles interactive mode")
+	version := flag.Bool("version", false, "Prints current version")
+
+	flag.Parse()
+
+	if *version {
 		fmt.Printf("git-open-pull v%s %s\n", Version, runtime.Version())
 		os.Exit(0)
 	}
@@ -66,6 +89,23 @@ func main() {
 	settings, err := LoadSettings(ctx)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	var labelSlice []string
+	if *labels != "" {
+		labelSlice = strings.Split(*labels, ",")
+		for idx := range labelSlice {
+			labelSlice[idx] = strings.TrimSpace(labelSlice[idx])
+		}
+	}
+
+	var descriptionString string
+	if *description != "" {
+		fileContent, err := ioutil.ReadFile(*description)
+		if err != nil {
+			log.Fatal(err)
+		}
+		descriptionString = string(fileContent)
 	}
 
 	branch, err := GitFeatureBranch(ctx)
@@ -87,7 +127,7 @@ func main() {
 	client := SetupClient(ctx, settings)
 
 	// create issue if needed
-	issueNumber, err := GetIssueNumber(ctx, client, settings, detectedIssueNumber)
+	issueNumber, err := GetIssueNumber(ctx, client, settings, detectedIssueNumber, *interactive, *title, descriptionString, labelSlice)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,22 +137,28 @@ func main() {
 
 	// Do we need/want to rename the branch?
 	if issueNumber != detectedIssueNumber {
-		yn, err := input.Ask(fmt.Sprintf("rename branch to %s_%d [Y/n]", branch, issueNumber), "")
-		if err != nil {
-			log.Fatal(err)
-		}
-		switch yn {
-		case "", "y", "Y":
-			fmt.Printf("renaming local branch %s to %s_%d\n", branch, branch, issueNumber)
-			branch = fmt.Sprintf("%s_%d", branch, issueNumber)
-			_, err = RunGit(ctx, "branch", "-m", branch)
+		if *interactive {
+			yn, err := input.Ask(fmt.Sprintf("rename branch to %s_%d [Y/n]", branch, issueNumber), "")
 			if err != nil {
 				log.Fatal(err)
 			}
-		case "n", "N":
-		default:
-			log.Fatalf("unknown response %q", yn)
+			switch yn {
+			case "", "y", "Y":
+				branch, err = RenameBranch(ctx, branch, issueNumber)
+				if err != nil {
+					log.Fatal(err)
+				}
+			case "n", "N":
+			default:
+				log.Fatalf("unknown response %q", yn)
+			}
+		} else {
+			branch, err = RenameBranch(ctx, branch, issueNumber)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
+
 	}
 
 	// confirm issue number is valid and issue is open
@@ -162,12 +208,14 @@ func main() {
 	fmt.Printf("Issue: %d (%s)\n", issueNumber, *issue.Title)
 	head := fmt.Sprintf("%s:%s", settings.User, branch)
 	fmt.Printf("pulling from %s into %s/%s branch %s\n", head, settings.BaseAccount, settings.BaseRepo, settings.BaseBranch)
-	yn, err := input.Ask("confirm [y/n]", "")
-	if err != nil {
-		log.Fatal(err)
-	}
-	if yn != "y" {
-		log.Fatal("exiting")
+	if *interactive {
+		yn, err := input.Ask("confirm [y/n]", "")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if strings.ToLower(yn) != "y" {
+			log.Fatal("exiting")
+		}
 	}
 
 	// convert Issue to PR
