@@ -7,6 +7,14 @@ Create a pull request from the command line, or attach a branch to an open GitHu
 
    $ git open-pull
 
+    git-open-pull takes the following optional arguments:
+    --interactive - boolean flag to turn off interactive mode; this is default set to true
+    --description-file - path to a file that contains your PR description
+    --title - string title for your PR
+    --labels - comma separated list of labels to be added to you PR
+    --version - print version of git-open-pull and Go
+
+    $ git open-pull --interactive=false --description-file="description.txt" --labels="label1, label2" --title="My PR Title"
 
 ### Installing
 
@@ -42,6 +50,18 @@ Hooks. git-open-pull provides the ability to modify an issue template (preProces
         preProcess = /path/to/exe
         postProcess = /path/to/exe
         callback = /path/to/exe
+
+git-open-pull will also look for the following environment variables, which will take precendence over values found in the config file.
+GITOPENPULL_TOKEN
+GITOPENPULL_USER
+GITOPENPULL_BASE_ACCOUNT
+GITOPENPULL_BASE_REPO
+GITOPENPULL_PRE_PROCESS
+GITOPENPULL_POST_PROCESS
+GITOPENPULL_CALLBACK
+GITOPENPULL_BASE_BRANCH
+GITOPENPULL_MAINTAINERS_CAN_MODIFY
+GITOPENPULL_EDITOR
 
 ### ABOUT
 
