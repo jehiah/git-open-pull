@@ -90,7 +90,7 @@ func PopulateIssueInteractive(ctx context.Context, client *github.Client, settin
 		fmt.Fprintf(tempFile, "%s\n", inputTitle)
 	}
 	if inputDescription != "" {
-		fmt.Fprintf(tempFile, " * %s\n", inputDescription)
+		fmt.Fprintf(tempFile, "%s\n", inputDescription)
 	}
 
 	// seed template with commit history
@@ -211,12 +211,7 @@ func PopulateIssueInteractive(ctx context.Context, client *github.Client, settin
 		}
 	}
 
-	var description string
-	if inputDescription != "" {
-		description = inputDescription
-	} else {
-		description = strings.TrimSpace(strings.Join(descriptions, "\n"))
-	}
+	description := strings.TrimSpace(strings.Join(descriptions, "\n"))
 
 	if title == "" {
 		return nil, fmt.Errorf("missing title")
