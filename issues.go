@@ -16,19 +16,26 @@ import (
 	"github.com/google/go-github/github"
 )
 
+// DetectIssueNumber parses out an existing issue from passed in branch name.
+// Issue numbers appear at the end of branch names are are separated from the
+// rest of the branch name by an underscore.
+// i.e: somebranch_1234
 func DetectIssueNumber(branch string) int {
 	if branch == "" {
 		return 0
 	}
-	b := strings.Replace(branch, "-", "_", -1)
-	chunks := strings.Split(b, "_")
 
-	for _, index := range []int{len(chunks) - 1, 0} {
-		if n, err := strconv.Atoi(chunks[index]); err == nil && n > 0 {
-			return n
-		}
+	sub := strings.Split(branch, "_")
+	if len(sub) <= 1 {
+		return 0
 	}
-	return 0
+
+	issueNumber, err := strconv.Atoi(sub[len(sub)-1])
+	if err != nil {
+		return 0
+	}
+
+	return issueNumber
 }
 
 func NewIssue(ctx context.Context, client *github.Client, settings *Settings, interactive bool, title, description string, labels []string) (issueNumber int, err error) {

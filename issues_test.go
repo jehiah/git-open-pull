@@ -5,19 +5,20 @@ import (
 	"testing"
 )
 
-func TestDetectIssueNumbert(t *testing.T) {
+func TestDetectIssueNumber(t *testing.T) {
 	type testCase struct {
 		branch      string
 		issueNumber int
 	}
 	tests := []testCase{
-		{"1_branch", 1},
+		{"1_branch", 0},
 		{"branch_1", 1},
 		{"branch_2_a", 0},
 		{"branch_2_33", 33},
 		{"1_branch_2", 2},
-		{"1-branch", 1},
+		{"1-branch", 0},
 		{"branch", 0},
+		{"branch-123", 0},
 	}
 	for i, tc := range tests {
 		tc := tc
