@@ -52,6 +52,8 @@ Hooks. git-open-pull provides the ability to modify an issue template (preProces
         callback = /path/to/exe
 
 git-open-pull will also look for the following environment variables, which will take precendence over values found in the config file.
+
+```
 GITOPENPULL_TOKEN
 GITOPENPULL_USER
 GITOPENPULL_BASE_ACCOUNT
@@ -62,6 +64,7 @@ GITOPENPULL_CALLBACK
 GITOPENPULL_BASE_BRANCH
 GITOPENPULL_MAINTAINERS_CAN_MODIFY
 GITOPENPULL_EDITOR
+```
 
 ### ABOUT
 
