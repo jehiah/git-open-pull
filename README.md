@@ -21,8 +21,8 @@ Create a pull request from the command line, or attach a branch to an open GitHu
 
 Install from source, or visit the [releases page](https://github.com/jehiah/git-open-pull/releases)
 
-```
-go get -u github.com/jehiah/git-open-pull
+```sh
+go install github.com/jehiah/git-open-pull@latest
 ````
 
 ### CONFIGURATION
