@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v57/github"
 	"github.com/jehiah/git-open-pull/internal/input"
 	"golang.org/x/oauth2"
 )
@@ -75,6 +75,7 @@ func main() {
 	title := flag.String("title", "", "PR Title")
 	interactive := flag.Bool("interactive", true, "Toggles interactive mode")
 	version := flag.Bool("version", false, "Prints current version")
+	draft := flag.Bool("draft", false, "Open PR in draft mode")
 
 	flag.Parse()
 
@@ -181,7 +182,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	// check branch exists on remote
-	branches, _, err := client.Repositories.ListBranches(ctx, settings.User, settings.BaseRepo, &github.ListOptions{PerPage: 100})
+	branches, _, err := client.Repositories.ListBranches(ctx, settings.User, settings.BaseRepo, &github.BranchListOptions{ListOptions: github.ListOptions{PerPage: 100}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -216,6 +217,14 @@ func main() {
 		if strings.ToLower(yn) != "y" {
 			log.Fatal("exiting")
 		}
+		yn, err = input.Ask("Open as draft [Y/n]", "")
+		if err != nil {
+			log.Fatal(err)
+		}
+		switch yn {
+		case "", "Y", "y":
+			*draft = true
+		}
 	}
 
 	// convert Issue to PR
@@ -224,6 +233,7 @@ func main() {
 		Base:                &settings.BaseBranch,
 		Head:                &head,
 		MaintainerCanModify: &settings.MaintainersCanModify,
+		Draft:               draft,
 	}
 	_, _, err = client.PullRequests.Create(ctx, settings.BaseAccount, settings.BaseRepo, params)
 	if err != nil {

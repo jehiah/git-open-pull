@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -13,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v57/github"
 )
 
 // DetectIssueNumber parses out an existing issue from passed in branch name.
@@ -86,7 +85,7 @@ func PopulateIssueInteractive(ctx context.Context, client *github.Client, settin
 		labelSet[l] = true
 	}
 
-	tempFile, err := ioutil.TempFile("", "git-open-pull")
+	tempFile, err := os.CreateTemp("", "git-open-pull")
 	if err != nil {
 		return nil, err
 	}
