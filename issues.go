@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-github/v57/github"
+	"github.com/google/go-github/v60/github"
 )
 
 // DetectIssueNumber parses out an existing issue from passed in branch name.

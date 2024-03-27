@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v57/github"
+	"github.com/google/go-github/v60/github"
 	"github.com/jehiah/git-open-pull/internal/input"
 	"golang.org/x/oauth2"
 )
