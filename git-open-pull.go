@@ -59,14 +59,19 @@ func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settin
 			return strconv.Atoi(n)
 		}
 	}
-	n, err := input.Ask(fmt.Sprintf("issue number [%d]", detected), "")
-	if err != nil {
-		log.Fatal(err)
+
+	if interactive {
+		n, err := input.Ask(fmt.Sprintf("issue number [%d]", detected), "")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if n == "" {
+			return detected, nil
+		}
+		return strconv.Atoi(n)
 	}
-	if n == "" {
-		return detected, nil
-	}
-	return strconv.Atoi(n)
+
+	return detected, nil
 }
 
 func main() {
