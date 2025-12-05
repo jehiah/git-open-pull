@@ -158,7 +158,7 @@ func PopulateIssueInteractive(ctx context.Context, client *github.Client, settin
 		cmd := exec.CommandContext(ctx, settings.PreProcess, tempFile.Name())
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Printf("error running pre process template: %s:\n  %s", settings.PreProcess, out)
+			log.Printf("error running pre process template: %s\n  error: %v\n  output: %s", settings.PreProcess, err, out)
 			return nil, err
 		}
 	}
@@ -182,7 +182,7 @@ func PopulateIssueInteractive(ctx context.Context, client *github.Client, settin
 		cmd = exec.CommandContext(ctx, settings.PostProcess, tempFile.Name())
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Printf("error running post process template: %s:\n  %s", settings.PostProcess, out)
+			log.Printf("error running post process template: %s\n  error: %v\n  output: %s", settings.PostProcess, err, out)
 			return nil, err
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -107,11 +106,16 @@ func main() {
 
 	var descriptionString string
 	if *description != "" {
-		fileContent, err := ioutil.ReadFile(*description)
+		fileContent, err := os.ReadFile(*description)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("error reading description file: %v", err)
 		}
 		descriptionString = string(fileContent)
+	}
+
+	// Validate flag combinations
+	if !*interactive && *description != "" && *title == "" {
+		log.Fatal("--title is required when using --description-file with --interactive=false")
 	}
 
 	branch, err := GitFeatureBranch(ctx)
@@ -250,7 +254,7 @@ func main() {
 
 	if settings.Callback != "" {
 		// fetch the json of the current issue
-		tempFile, err := ioutil.TempFile("", fmt.Sprintf("issue-%d", issueNumber))
+		tempFile, err := os.CreateTemp("", fmt.Sprintf("issue-%d", issueNumber))
 		if err != nil {
 			log.Fatal(err)
 		}
