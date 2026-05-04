@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"log"
@@ -13,9 +14,13 @@ import (
 	"time"
 
 	"github.com/google/go-github/v60/github"
+	"github.com/jehiah/agentdetection"
 	"github.com/jehiah/git-open-pull/internal/input"
 	"golang.org/x/oauth2"
 )
+
+//go:embed SKILL.md
+var skillDoc string
 
 func RenameBranch(ctx context.Context, branch string, issueNumber int) (string, error) {
 	branch = fmt.Sprintf("%s_%d", branch, issueNumber)
@@ -73,13 +78,51 @@ func GetIssueNumber(ctx context.Context, client *github.Client, settings *Settin
 	return detected, nil
 }
 
+func printUsage(settings *Settings) {
+	out := flag.CommandLine.Output()
+	fmt.Fprintln(out, "git-open-pull creates an issue, renames the local branch to include that issue number, pushes the renamed branch and finally converts the issue into a pull request against the renamed branch.")
+	fmt.Fprintln(out, "Functionally similar to 'gh pr create'.")
+	if settings != nil && settings.User != "" && settings.BaseAccount != "" && settings.BaseRepo != "" {
+		fmt.Fprintf(out, "By default, code is pushed to %s/%s and the pull request targets %s/%s branch %s.\n", settings.User, settings.BaseRepo, settings.BaseAccount, settings.BaseRepo, settings.BaseBranch)
+	}
+	fmt.Fprintln(out)
+
+	if settings != nil {
+		if hints := settings.RequiredHints(); len(hints) > 0 {
+			fmt.Fprintln(out, "Required configuration missing:")
+			for _, h := range hints {
+				fmt.Fprintf(out, "  - %s\n", h)
+			}
+			fmt.Fprintln(out)
+		}
+	}
+
+	if agentdetection.IsAgent() {
+		fmt.Fprintln(out, "Agent Hint: run --list-labels first to inspect the valid repository labels before passing --labels.")
+		fmt.Fprintln(out, "Do not push code prior to running, as the branch will be renamed to include the issue number.")
+		fmt.Fprintln(out, "Run --skill for full agent usage documentation, or redirect to a file: git-open-pull --skill > SKILL.md")
+		fmt.Fprintln(out)
+	}
+	fmt.Fprintf(out, "Usage of %s:\n", os.Args[0])
+	flag.PrintDefaults()
+}
+
 func main() {
+	ctx := context.Background()
+	preSettings, _ := readSettingsConfig(ctx)
+
+	flag.Usage = func() {
+		printUsage(preSettings)
+	}
+
 	description := flag.String("description-file", "", "Path to PR description file")
+	listLabels := flag.Bool("list-labels", false, "List available issue labels and exit")
+	skill := flag.Bool("skill", false, "Print agent skill documentation and exit")
 	labels := flag.String("labels", "", "Comma separated PR Labels")
 	title := flag.String("title", "", "PR Title")
 	interactive := flag.Bool("interactive", true, "Toggles interactive mode")
 	version := flag.Bool("version", false, "Prints current version")
-	draft := flag.Bool("draft", false, "Open PR in draft mode")
+	draft := flag.Bool("draft", true, "Open PR in draft mode (non-interactive only)")
 
 	flag.Parse()
 
@@ -88,12 +131,42 @@ func main() {
 		os.Exit(0)
 	}
 
-	ctx := context.Background()
+	if *skill {
+		fmt.Print(skillDoc)
+		return
+	}
 
-	// Load and initialize settings
-	settings, err := LoadSettings(ctx)
-	if err != nil {
-		log.Fatal(err)
+	var settings *Settings
+	var err error
+	if *interactive {
+		settings, err = LoadSettings(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		settings, err = readSettingsConfig(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if hints := settings.RequiredHints(); len(hints) > 0 {
+			for _, h := range hints {
+				fmt.Fprintln(os.Stderr, h)
+			}
+			os.Exit(1)
+		}
+	}
+
+	client := SetupClient(ctx, settings)
+
+	if *listLabels {
+		labels, err := Labels(ctx, client, settings)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, label := range labels {
+			fmt.Println(label)
+		}
+		return
 	}
 
 	var labelSlice []string
@@ -123,8 +196,9 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("current branch %s\n", branch)
-	if branch == "master" {
-		yn, err := input.Ask("Are you sure you want to make a pull request from master? [y/N]", "")
+	switch branch {
+	case "main", "master":
+		yn, err := input.Ask(fmt.Sprintf("Are you sure you want to make a pull request from %s? [y/N]", branch), "")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -133,8 +207,6 @@ func main() {
 		}
 	}
 	detectedIssueNumber := DetectIssueNumber(branch)
-
-	client := SetupClient(ctx, settings)
 
 	// create issue if needed
 	issueNumber, err := GetIssueNumber(ctx, client, settings, detectedIssueNumber, *interactive, *title, descriptionString, labelSlice)
@@ -226,13 +298,18 @@ func main() {
 		if strings.ToLower(yn) != "y" {
 			log.Fatal("exiting")
 		}
-		yn, err = input.Ask("Open as draft [Y/n]", "")
+	}
+
+	if *interactive {
+		yn, err := input.Ask("Open as draft [Y/n]", "")
 		if err != nil {
 			log.Fatal(err)
 		}
 		switch yn {
 		case "", "Y", "y":
 			*draft = true
+		case "n", "N":
+			*draft = false
 		}
 	}
 
