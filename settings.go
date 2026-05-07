@@ -38,11 +38,17 @@ type Settings struct {
 	PostProcess string
 	// callback is called after a PR is created. It's first argument is a filename that contains the PR json
 	Callback string
+
+	// inferred from remote URLs if gitOpenPull.baseRepo is not set
+	DefaultBaseRepo string
 }
 
 // this function tries to get settings from the environment variables
 func GetEnvSettings(s *Settings) error {
 	token := os.Getenv("GITOPENPULL_TOKEN")
+	if token == "" {
+		token = os.Getenv("GITHUB_TOKEN")
+	}
 	if token != "" {
 		s.Token = token
 	}
@@ -93,18 +99,32 @@ func GetEnvSettings(s *Settings) error {
 	return nil
 }
 
-// LoadSettings extracts the git and gitOpenPull sections from $HOME/.gitconfig and .git/config
-func LoadSettings(ctx context.Context) (*Settings, error) {
+func detectDefaultBaseBranch(ctx context.Context) string {
+	// Check for local branch names 'main' or 'master'
+	if _, err := RunGit(ctx, "show-ref", "--verify", "--quiet", "refs/heads/main"); err == nil {
+		return "main"
+	}
+	if _, err := RunGit(ctx, "show-ref", "--verify", "--quiet", "refs/heads/master"); err == nil {
+		return "master"
+	}
 
+	// Final fallback preserves previous behavior.
+	return "master"
+}
+
+// readSettingsConfig reads settings from git config and environment variables without prompting.
+// It returns the settings (possibly with empty required fields) and any hard error.
+// Settings.DefaultBaseRepo is set if a base repo can be inferred from remote URLs.
+func readSettingsConfig(ctx context.Context) (*Settings, error) {
 	body, err := RunGit(ctx, "config", "--list")
 	if err != nil {
 		return nil, err
 	}
 	s := Settings{
-		BaseBranch: "master",
+		BaseBranch: detectDefaultBaseBranch(ctx),
 		Editor:     "/usr/bin/vi",
 	}
-	var defaultBaseRepo, maintainersCanModify string
+	var maintainersCanModify string
 	scanner := bufio.NewScanner(bytes.NewBuffer(body))
 	for scanner.Scan() {
 		line := strings.SplitN(strings.TrimSpace(scanner.Text()), "=", 2)
@@ -137,10 +157,10 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 		case "core.editor":
 			s.Editor = line[1]
 		default:
-			if strings.HasSuffix(line[0], ".url") && strings.HasSuffix(line[1], ".git") && defaultBaseRepo == "" {
+			if strings.HasSuffix(line[0], ".url") && strings.HasSuffix(line[1], ".git") && s.DefaultBaseRepo == "" {
 				chunks := strings.Split(line[1], "/")
-				defaultBaseRepo = chunks[len(chunks)-1]
-				defaultBaseRepo = defaultBaseRepo[:len(defaultBaseRepo)-4]
+				s.DefaultBaseRepo = chunks[len(chunks)-1]
+				s.DefaultBaseRepo = s.DefaultBaseRepo[:len(s.DefaultBaseRepo)-4]
 			}
 		}
 	}
@@ -150,8 +170,17 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-
 	err = GetEnvSettings(&s)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// LoadSettings extracts settings from $HOME/.gitconfig and .git/config, prompting
+// interactively for any missing required values and persisting them to git config.
+func LoadSettings(ctx context.Context) (*Settings, error) {
+	s, err := readSettingsConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,12 +215,12 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 	}
 
 	if s.BaseRepo == "" {
-		s.BaseRepo, err = input.Ask(fmt.Sprintf("GitHub repository name (ie: github.com/%s/___)", s.BaseAccount), defaultBaseRepo)
+		s.BaseRepo, err = input.Ask(fmt.Sprintf("GitHub repository name (ie: github.com/%s/___)", s.BaseAccount), s.DefaultBaseRepo)
 		if err != nil {
 			return nil, err
 		}
 		if s.BaseRepo == "" {
-			return nil, fmt.Errorf("GitHub repository name required. Set `git config gitOpenPull.baseAccount $PROJECT`")
+			return nil, fmt.Errorf("GitHub repository name required. Set `git config gitOpenPull.baseRepo $PROJECT`")
 		}
 		_, err = RunGit(ctx, "config", "gitOpenPull.baseRepo", s.BaseRepo)
 		if err != nil {
@@ -200,12 +229,12 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 	}
 
 	if s.Token == "" {
-		s.Token, err = input.Ask("Github access token (You can genrate a token from https://github.com/settings/tokens)", "")
+		s.Token, err = input.Ask("GitHub access token (You can generate a token from https://github.com/settings/tokens)", "")
 		if err != nil {
 			return nil, err
 		}
 		if s.Token == "" {
-			return nil, fmt.Errorf("Github token required. Set `git config --global gitOpenPull.token $TOKEN`")
+			return nil, fmt.Errorf("GitHub token required. Set `git config --global gitOpenPull.token $TOKEN`")
 		}
 		_, err = RunGit(ctx, "config", "--global", "gitOpenPull.token", s.Token)
 		if err != nil {
@@ -213,6 +242,26 @@ func LoadSettings(ctx context.Context) (*Settings, error) {
 		}
 	}
 
-	return &s, nil
+	return s, nil
 
+}
+
+// RequiredHints returns a list of human-readable instructions for each required
+// setting that is currently missing. An empty slice means all required settings
+// are present.
+func (s Settings) RequiredHints() []string {
+	var hints []string
+	if s.User == "" {
+		hints = append(hints, "GitHub username required. Set `git config --global github.user $USER`")
+	}
+	if s.BaseAccount == "" {
+		hints = append(hints, "Destination GitHub username required. Set `git config gitOpenPull.baseAccount $ACCOUNT`")
+	}
+	if s.BaseRepo == "" {
+		hints = append(hints, "GitHub repository name required. Set `git config gitOpenPull.baseRepo $PROJECT`")
+	}
+	if s.Token == "" {
+		hints = append(hints, "GitHub token required. Set `git config --global gitOpenPull.token $TOKEN` or set GITHUB_TOKEN env variable")
+	}
+	return hints
 }

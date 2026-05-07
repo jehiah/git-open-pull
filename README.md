@@ -54,7 +54,7 @@ Hooks. git-open-pull provides the ability to modify an issue template (preProces
 git-open-pull will also look for the following environment variables, which will take precendence over values found in the config file.
 
 ```
-GITOPENPULL_TOKEN
+GITOPENPULL_TOKEN || GITHUB_TOKEN
 GITOPENPULL_USER
 GITOPENPULL_BASE_ACCOUNT
 GITOPENPULL_BASE_REPO
